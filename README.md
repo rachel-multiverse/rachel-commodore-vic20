@@ -58,8 +58,8 @@ VIC-20 = `0x000C` (12)
 
 ## Protocol
 
-Uses RUBP (Rachel Universal Binary Protocol) - 64-byte fixed messages.
-See `docs/PROTOCOL.md` for specification.
+Uses RUBP (Rachel Unified Binary Protocol) - 64-byte fixed messages.
+Full specification: [rachel-multiverse/protocol](https://github.com/rachel-multiverse/protocol).
 
 ## Screen Layout
 
