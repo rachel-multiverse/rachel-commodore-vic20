@@ -4,6 +4,17 @@
 ; Requires 8KB+ memory expansion
 ; =============================================================================
 
+.segment "BASIC"
+
+; BASIC line 10: SYS 4624 ($1210). This makes the documented LOAD/RUN flow
+; enter machine code instead of asking BASIC to interpret opcodes as tokens.
+        .word basic_end
+        .word 10
+        .byte $9e
+        .byte "4624", 0
+basic_end:
+        .word 0
+
 .segment "CODE"
 
 .include "equates.asm"
@@ -35,6 +46,9 @@ conn_ok:
         ; Send HELLO with player name and platform ID
         jsr send_hello
 
+        ; Complete the handshake before waiting for the private initial deal.
+        jsr wait_for_welcome
+
         ; Wait for game to start
         jsr wait_for_game
 
@@ -48,14 +62,28 @@ main_loop:
 
         lda rx_buffer+HDR_TYPE
         cmp #MSG_GAME_STATE
-        bne ml_check_end
+        bne ml_check_drawn
 
         jsr process_game_state
         jsr render_game
         jmp ml_input
 
+ml_check_drawn:
+        cmp #MSG_CARD_DRAWN
+        bne ml_check_sync
+        jsr process_card_drawn
+        jsr render_hand
+        jmp ml_input
+
+ml_check_sync:
+        cmp #MSG_HAND_SYNC
+        bne ml_check_end
+        jsr process_game_start
+        jsr render_hand
+        jmp ml_input
+
 ml_check_end:
-        cmp #MSG_GAME_END
+        cmp #MSG_PLAYER_WON
         bne ml_no_msg
         jmp game_over
 
@@ -69,7 +97,9 @@ ml_input:
         ; Handle input
         jsr get_input
         cmp #KEY_ESC
-        beq quit_game
+        bne ml_not_quit
+        jmp quit_game
+ml_not_quit:
         cmp #KEY_LEFT
         beq ml_left
         cmp #KEY_RIGHT
@@ -101,7 +131,9 @@ ml_select:
 
 ml_play:
         jsr count_selected
-        beq main_loop           ; Nothing selected
+        bne ml_play_selected
+        jmp main_loop           ; Nothing selected
+ml_play_selected:
         lda #$FF                ; No suit nomination
         jsr send_play_cards
         jmp main_loop
@@ -147,6 +179,22 @@ quit_game:
 ; -----------------------------------------------------------------------------
 ; Wait for game to start
 ; -----------------------------------------------------------------------------
+.proc wait_for_welcome
+wfw_loop:
+        jsr net_recv
+        bcs wfw_loop
+        jsr rubp_validate
+        bcs wfw_loop
+        lda rx_buffer+HDR_TYPE
+        cmp #MSG_WELCOME
+        bne wfw_loop
+        jsr process_welcome
+        rts
+.endproc
+
+; -----------------------------------------------------------------------------
+; Wait for game to start
+; -----------------------------------------------------------------------------
 .proc wait_for_game
         jsr display_clear
         lda #0
@@ -167,11 +215,17 @@ wfg_loop:
         bcs wfg_loop
 
         lda rx_buffer+HDR_TYPE
+        cmp #MSG_GAME_START
+        beq wfg_start
         cmp #MSG_GAME_STATE
         bne wfg_loop
 
         jsr process_game_state
         rts
+wfg_start:
+        jsr process_game_start
+        ; A public GAME_STATE follows and supplies turn/table state.
+        jmp wfg_loop
 .endproc
 
 ; -----------------------------------------------------------------------------

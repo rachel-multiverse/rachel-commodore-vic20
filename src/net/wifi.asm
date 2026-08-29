@@ -219,6 +219,10 @@ timeout_hi:     .byte 0
 ; -----------------------------------------------------------------------------
 serial_send:
         sta ZP_TEMP4
+        txa
+        pha
+        tya
+        pha
 
         ; Start bit (low)
         lda VIA1_PORTA
@@ -249,6 +253,10 @@ ss_out:
         sta VIA1_PORTA
         jsr bit_delay
 
+        pla
+        tay
+        pla
+        tax
         rts
 
 ; -----------------------------------------------------------------------------
@@ -256,6 +264,11 @@ ss_out:
 ; Returns: A = byte, C=0 success, C=1 no data
 ; -----------------------------------------------------------------------------
 serial_recv:
+        txa
+        pha
+        tya
+        pha
+
         ; Check for start bit (low on PA6)
         lda VIA1_PORTA
         and #$40
@@ -287,10 +300,20 @@ sr_shift:
         jsr bit_delay
 
         lda ZP_TEMP4
+        sta ZP_TEMP3
+        pla
+        tay
+        pla
+        tax
+        lda ZP_TEMP3
         clc
         rts
 
 sr_none:
+        pla
+        tay
+        pla
+        tax
         sec
         rts
 
@@ -320,9 +343,10 @@ net_send:
         sta ZP_PTR1+1
         jsr send_string
 
-        ; Small delay for modem
-        jsr bit_delay
-        jsr bit_delay
+        ; The ESP-AT modem does not accept payload bytes until it has emitted
+        ; its '>' prompt. Sending immediately races the command parser.
+        jsr wait_send_prompt
+        bcs ns_failed
 
         ; Send 64 bytes from tx_buffer
         ldx #0
@@ -333,6 +357,11 @@ ns_loop:
         cpx #64
         bne ns_loop
 
+        clc
+        rts
+
+ns_failed:
+        sec
         rts
 
 at_cipsend:
@@ -343,13 +372,30 @@ at_cipsend:
 ; Returns: C=0 data received, C=1 no data
 ; -----------------------------------------------------------------------------
 net_recv:
-        ; Try to receive 64 bytes
-        ldx #0
+        ; ESP-AT wraps passive TCP data in +IPD metadata. Synchronise on the
+        ; RUBP magic so modem status text can never be mistaken for a frame.
+nr_find_r:
+        jsr serial_recv
+        bcs nr_none
+        cmp #'R'
+        bne nr_find_r
+        lda #'R'
+        sta rx_buffer
+        ldx #1
+
+nr_magic:
+        jsr recv_with_timeout
+        bcs nr_none
+        cmp rubp_magic,x
+        bne nr_find_r
+        sta rx_buffer,x
+        inx
+        cpx #4
+        bne nr_magic
 
 nr_loop:
-        jsr serial_recv
-        bcs nr_partial
-
+        jsr recv_with_timeout
+        bcs nr_none
         sta rx_buffer,x
         inx
         cpx #64
@@ -358,32 +404,46 @@ nr_loop:
         clc
         rts
 
-nr_partial:
-        ; Check if we got anything
-        cpx #0
-        beq nr_none
-
-        ; Partial receive - wait for more
+; Wait long enough for a byte within an in-progress 64-byte frame.
+recv_with_timeout:
         ldy #0
-nr_wait:
+nr_wait_byte:
         jsr serial_recv
-        bcc nr_got
+        bcc nr_byte_ready
         iny
-        bne nr_wait
-        ; Timeout - return what we have
-        clc
+        bne nr_wait_byte
+        sec
         rts
-
-nr_got:
-        sta rx_buffer,x
-        inx
-        cpx #64
-        bne nr_loop
+nr_byte_ready:
         clc
         rts
 
 nr_none:
         sec
+        rts
+
+rubp_magic:
+        .byte "RACH"
+
+; Wait for the ESP-AT CIPSEND prompt.
+wait_send_prompt:
+        ldy #0
+wsp_loop:
+        jsr serial_recv
+        bcc wsp_byte
+        iny
+        bne wsp_loop
+        sec
+        rts
+wsp_byte:
+        cmp #'>'
+        beq wsp_ready
+        iny
+        bne wsp_loop
+        sec
+        rts
+wsp_ready:
+        clc
         rts
 
 ; -----------------------------------------------------------------------------

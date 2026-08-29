@@ -76,8 +76,13 @@ cl_done:
         rts
 
 cursor_right:
+        lda hand_count
+        beq cr_done
+        sec
+        sbc #1
+        sta ZP_TEMP1
         lda cursor_pos
-        cmp hand_count
+        cmp ZP_TEMP1
         bcs cr_done
         inc cursor_pos
 cr_done:
@@ -88,48 +93,9 @@ cr_done:
 ; -----------------------------------------------------------------------------
 toggle_select:
         ldx cursor_pos
-        lda selected_lo
-        sta ZP_TEMP1
-        lda selected_hi
-        sta ZP_TEMP2
-
-        ; Create bit mask
         lda #1
-ts_shift:
-        cpx #0
-        beq ts_toggle
-        asl
-        rol ZP_TEMP2
-        dex
-        bne ts_shift
-
-ts_toggle:
-        ; Toggle the bit
-        ldx cursor_pos
-        cpx #8
-        bcs ts_high
-
-        ; Low byte
-        eor selected_lo
-        sta selected_lo
-        rts
-
-ts_high:
-        ; High byte
-        txa
-        sec
-        sbc #8
-        tax
-        lda #1
-ts_shift2:
-        cpx #0
-        beq ts_do_hi
-        asl
-        dex
-        bne ts_shift2
-ts_do_hi:
-        eor selected_hi
-        sta selected_hi
+        eor selected_cards,x
+        sta selected_cards,x
         rts
 
 ; -----------------------------------------------------------------------------
@@ -139,7 +105,5 @@ cursor_pos:
         .byte 0
 hand_count:
         .byte 0
-selected_lo:
-        .byte 0
-selected_hi:
-        .byte 0
+selected_cards:
+        .res 32, 0

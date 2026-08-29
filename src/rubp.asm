@@ -40,11 +40,6 @@ build_header:
         lda ZP_TEMP1
         sta tx_buffer+HDR_TYPE
 
-        ; Flags and reserved
-        lda #0
-        sta tx_buffer+HDR_FLAGS
-        sta tx_buffer+HDR_RESERVED
-
         ; Sequence number (big-endian)
         lda sequence_hi
         sta tx_buffer+HDR_SEQ
@@ -69,10 +64,21 @@ bh_no_carry:
         lda game_id_lo
         sta tx_buffer+HDR_GAME_ID+1
 
-        ; Checksum (placeholder)
+        ; No real-time clock is available, so use the canonical zero timestamp.
         lda #0
-        sta tx_buffer+HDR_CHECKSUM
-        sta tx_buffer+HDR_CHECKSUM+1
+        sta tx_buffer+HDR_TIMESTAMP
+        sta tx_buffer+HDR_TIMESTAMP+1
+        sta tx_buffer+HDR_TIMESTAMP+2
+        sta tx_buffer+HDR_TIMESTAMP+3
+
+        ; Every message starts with a clean payload; optional metadata must not
+        ; leak bytes from the previous frame.
+        ldx #PAYLOAD_START
+bh_clear:
+        sta tx_buffer,x
+        inx
+        cpx #64
+        bne bh_clear
 
         rts
 
@@ -82,15 +88,6 @@ bh_no_carry:
 send_hello:
         lda #MSG_HELLO
         jsr build_header
-
-        ; Clear payload first
-        ldx #PAYLOAD_START
-        lda #0
-sh_clear:
-        sta tx_buffer,x
-        inx
-        cpx #64
-        bne sh_clear
 
         ; Copy player name to payload bytes 0-15
         ldx #0
@@ -109,6 +106,11 @@ sh_name_done:
         sta tx_buffer+PAYLOAD_START+16
         lda #PLATFORM_ID_LO
         sta tx_buffer+PAYLOAD_START+17
+
+        lda #0
+        sta tx_buffer+PAYLOAD_START+18
+        lda #RACHEL_SPEC_VER
+        sta tx_buffer+PAYLOAD_START+19
 
         jsr net_send
         rts
@@ -132,19 +134,19 @@ send_play_cards:
         sta tx_buffer+PAYLOAD_START    ; Card count
 
         lda nominated_suit
-        sta tx_buffer+PAYLOAD_START+1  ; Nominated suit
+        sta tx_buffer+PAYLOAD_START+33 ; Nominated suit
+
+        lda #0
+        sta tx_buffer+PAYLOAD_START+34
+        lda #RACHEL_SPEC_VER
+        sta tx_buffer+PAYLOAD_START+35
 
         ; Copy selected cards to payload
         ldx #0
-        ldy #2                  ; Start at payload+2
-        lda selected_lo
-        sta ZP_TEMP1
-        lda selected_hi
-        sta ZP_TEMP2
+        ldy #1                  ; Cards occupy payload bytes 1-32
 
 spc_loop:
-        lda ZP_TEMP1
-        and #1
+        lda selected_cards,x
         beq spc_next
 
         ; This card is selected
@@ -153,17 +155,17 @@ spc_loop:
         iny
 
 spc_next:
-        ; Shift selection bits right
-        lsr ZP_TEMP2
-        ror ZP_TEMP1
         inx
         cpx hand_count
         bcc spc_loop
 
         ; Clear selection
+        ldx #31
         lda #0
-        sta selected_lo
-        sta selected_hi
+spc_clear_selection:
+        sta selected_cards,x
+        dex
+        bpl spc_clear_selection
 
         jsr net_send
         rts
@@ -176,20 +178,15 @@ count_selected:
         lda #0
         sta ZP_TEMP4
 
-        lda selected_lo
-        sta ZP_TEMP1
-        lda selected_hi
-        sta ZP_TEMP2
-
-        ldx #16
+        ldx #0
 cs_loop:
-        lsr ZP_TEMP2
-        ror ZP_TEMP1
-        bcc cs_skip
+        lda selected_cards,x
+        beq cs_skip
         inc ZP_TEMP4
 cs_skip:
-        dex
-        bne cs_loop
+        inx
+        cpx hand_count
+        bcc cs_loop
 
         lda ZP_TEMP4
         rts
@@ -201,14 +198,13 @@ send_draw:
         lda #MSG_DRAW_CARD
         jsr build_header
 
-        ; Clear payload
-        ldx #PAYLOAD_START
+        ; reason=0 (cannot play), count=1, RachelSpec v1
+        lda #1
+        sta tx_buffer+PAYLOAD_START+1
         lda #0
-sd_clear:
-        sta tx_buffer,x
-        inx
-        cpx #64
-        bne sd_clear
+        sta tx_buffer+PAYLOAD_START+2
+        lda #RACHEL_SPEC_VER
+        sta tx_buffer+PAYLOAD_START+3
 
         jsr net_send
         rts
@@ -264,33 +260,72 @@ process_game_state:
         lda rx_buffer+PAYLOAD_START+5
         sta pending_skips
 
+        lda rx_buffer+PAYLOAD_START+6
+        sta deck_count
+
         ; Copy player counts
         ldx #0
 pgs_counts:
-        lda rx_buffer+PAYLOAD_START+6,x
+        lda rx_buffer+PAYLOAD_START+7,x
         sta player_counts,x
         inx
         cpx #8
         bne pgs_counts
 
-        ; My index and hand count
-        lda rx_buffer+PAYLOAD_START+14
+        rts
+
+; WELCOME assigns the seat and game. Player IDs are canonical seat indices.
+process_welcome:
+        lda rx_buffer+PAYLOAD_START
+        sta player_id_hi
+        lda rx_buffer+PAYLOAD_START+1
+        sta player_id_lo
         sta my_index
+        lda rx_buffer+PAYLOAD_START+2
+        sta game_id_hi
+        lda rx_buffer+PAYLOAD_START+3
+        sta game_id_lo
+        lda rx_buffer+PAYLOAD_START+4
+        sta player_count
+        rts
 
-        lda rx_buffer+PAYLOAD_START+15
+; GAME_START replaces the private hand with the initial deal.
+process_game_start:
+        lda rx_buffer+PAYLOAD_START
+        cmp #33
+        bcc pstart_count_ok
+        lda #32
+pstart_count_ok:
         sta hand_count
-
-        ; Copy hand
         ldx #0
-pgs_hand:
+pstart_hand:
         cpx hand_count
-        bcs pgs_done
-        lda rx_buffer+PAYLOAD_START+16,x
+        bcs pstart_done
+        lda rx_buffer+PAYLOAD_START+1,x
         sta my_hand,x
         inx
-        bne pgs_hand
+        bne pstart_hand
+pstart_done:
+        rts
 
-pgs_done:
+; CARD_DRAWN appends a private draw without relying on public GAME_STATE.
+process_card_drawn:
+        lda rx_buffer+PAYLOAD_START
+        sta ZP_TEMP1
+        ldx #0
+pcd_loop:
+        cpx ZP_TEMP1
+        bcs pcd_done
+        lda hand_count
+        cmp #32
+        bcs pcd_done
+        tay
+        lda rx_buffer+PAYLOAD_START+1,x
+        sta my_hand,y
+        inc hand_count
+        inx
+        bne pcd_loop
+pcd_done:
         rts
 
 ; -----------------------------------------------------------------------------
@@ -311,9 +346,11 @@ discard_top:        .byte 0
 nominated_suit_recv:.byte $FF
 pending_draws:      .byte 0
 pending_skips:      .byte 0
+deck_count:         .byte 0
 my_index:           .byte 0
+player_count:       .byte 0
 player_counts:      .res 8, 0
-my_hand:            .res 16, 0
+my_hand:            .res 32, 0
 
 ; Buffers
 tx_buffer:      .res 64, 0

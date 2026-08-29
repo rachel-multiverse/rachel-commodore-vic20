@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cc65
+        run: sudo apt-get update && sudo apt-get install --yes cc65
+      - name: Build PRG and run conformance checks
+        run: make test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rachel-vic20-prg
+          path: build/rachel.prg

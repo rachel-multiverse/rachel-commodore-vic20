@@ -102,6 +102,10 @@ ps_done:
 ; -----------------------------------------------------------------------------
 print_char:
         pha
+        txa
+        pha
+        tya
+        pha
 
         ; Calculate screen address
         lda ZP_CURSOR_Y
@@ -114,8 +118,15 @@ print_char:
 
         ; Add X offset
         ldy ZP_CURSOR_X
+        sty ZP_PTR3
         pla
+        sta ZP_PTR3+1
+        pla
+        tax
+        pla
+        ldy ZP_PTR3
         sta (ZP_PTR2),y
+        ldy ZP_PTR3+1
 
         ; Advance cursor
         inc ZP_CURSOR_X

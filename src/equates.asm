@@ -16,6 +16,7 @@ ZP_CURSOR_X     = $78           ; Cursor X position
 ZP_CURSOR_Y     = $79           ; Cursor Y position
 ZP_SCREEN_LO    = $7A           ; Screen address low
 ZP_SCREEN_HI    = $7B           ; Screen address high
+ZP_PTR3         = $7C           ; Display scratch pointer (2 bytes)
 
 ; -----------------------------------------------------------------------------
 ; VIC-20 Hardware Addresses
@@ -76,34 +77,40 @@ MAGIC_1         = 'A'
 MAGIC_2         = 'C'
 MAGIC_3         = 'H'
 PROTOCOL_VER    = 1
+RACHEL_SPEC_VER = 1
 
 ; Header offsets
 HDR_MAGIC       = 0             ; 4 bytes
 HDR_VERSION     = 4             ; 1 byte
 HDR_TYPE        = 5             ; 1 byte
-HDR_FLAGS       = 6             ; 1 byte
-HDR_RESERVED    = 7             ; 1 byte
-HDR_SEQ         = 8             ; 2 bytes
-HDR_PLAYER_ID   = 10            ; 2 bytes
-HDR_GAME_ID     = 12            ; 2 bytes
-HDR_CHECKSUM    = 14            ; 2 bytes
+HDR_SEQ         = 6             ; 2 bytes
+HDR_PLAYER_ID   = 8             ; 2 bytes
+HDR_GAME_ID     = 10            ; 2 bytes
+HDR_TIMESTAMP   = 12            ; 4 bytes (zero when no clock is available)
 PAYLOAD_START   = 16
 PAYLOAD_SIZE    = 48
 
 ; Message types
 MSG_HELLO       = $01
-MSG_LEAVE       = $02
+MSG_WELCOME     = $02
 
 ; Platform ID (VIC-20 = 0x000C)
 PLATFORM_ID_HI  = $00
 PLATFORM_ID_LO  = $0C
-MSG_READY       = $03
-MSG_GAME_START  = $10
-MSG_GAME_STATE  = $11
-MSG_GAME_END    = $12
-MSG_PLAY_CARDS  = $20
-MSG_DRAW_CARD   = $21
-MSG_NOMINATE    = $22
+MSG_GAME_START  = $03
+MSG_PLAY_CARDS  = $04
+MSG_DRAW_CARD   = $05
+MSG_CARD_DRAWN  = $06
+MSG_GAME_STATE  = $07
+MSG_TURN_START  = $08
+MSG_TURN_END    = $09
+MSG_PLAYER_WON  = $0A
+MSG_ERROR       = $0B
+MSG_PLAYER_LIST = $0C
+MSG_ANNOUNCE    = $0D
+MSG_PLAYER_NAME = $0E
+MSG_HAND_SYNC   = $0F
+MSG_SYNC_REQUEST= $10
 
 ; -----------------------------------------------------------------------------
 ; Connection States
@@ -121,7 +128,7 @@ SUIT_DIAMONDS   = 1
 SUIT_CLUBS      = 2
 SUIT_SPADES     = 3
 
-RANK_ACE        = 1
+RANK_ACE        = 14
 RANK_JACK       = 11
 RANK_QUEEN      = 12
 RANK_KING       = 13

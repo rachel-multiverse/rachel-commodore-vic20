@@ -13,6 +13,7 @@ A VIC-20 client for the Rachel card game, written in 6502 assembly.
 ```bash
 make clean
 make
+make test
 ```
 
 This produces `build/rachel.prg`.
@@ -50,7 +51,9 @@ The WiFi modem connects to the VIC-20 user port:
 - PA6: RX (input)
 - GND: Ground
 
-Uses AT commands for ESP8266/ESP32 modems.
+Uses ESP-AT commands for ESP8266/ESP32 modems. The client waits for the
+`CIPSEND` prompt before transmitting and strips `+IPD`/status text by
+synchronising received data on the RUBP `RACH` magic.
 
 ## Platform ID
 
@@ -58,8 +61,13 @@ VIC-20 = `0x000C` (12)
 
 ## Protocol
 
-Uses RUBP (Rachel Unified Binary Protocol) - 64-byte fixed messages.
+Uses canonical RUBP v1 (Rachel Unified Binary Protocol) 64-byte messages,
+including the `WELCOME`, private `GAME_START`/`CARD_DRAWN`/`HAND_SYNC`, and
+public `GAME_STATE` flows. Action messages carry RachelSpec v1 metadata.
 Full specification: [rachel-multiverse/protocol](https://github.com/rachel-multiverse/protocol).
+
+GitHub Actions builds the PRG and verifies its BASIC `RUN` trampoline, memory
+layout and protocol constants on every change.
 
 ## Screen Layout
 

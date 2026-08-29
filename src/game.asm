@@ -67,8 +67,23 @@ render_hand:
         sta ZP_PTR1+1
         jsr print_string
 
-        ; Show hand count
+        ; Show hand count as two decimal digits (hands can contain 32 cards).
         lda hand_count
+        ldx #0
+rh_tens:
+        cmp #10
+        bcc rh_digits
+        sec
+        sbc #10
+        inx
+        bne rh_tens
+rh_digits:
+        sta ZP_TEMP2
+        txa
+        clc
+        adc #'0'
+        jsr print_char
+        lda ZP_TEMP2
         clc
         adc #'0'
         jsr print_char
@@ -82,10 +97,33 @@ render_hand:
         lda #20
         sta ZP_CURSOR_Y
 
-        ; Render each card
-        ldx #0
+        ; Five compact cards fit on a 22-column row. Show the page containing
+        ; the cursor so every one of the possible 32 cards remains reachable.
+        lda cursor_pos
+rh_page:
+        cmp #5
+        bcc rh_page_ready
+        sec
+        sbc #5
+        bcs rh_page
+rh_page_ready:
+        sta ZP_TEMP1
+        lda cursor_pos
+        sec
+        sbc ZP_TEMP1
+        sta ZP_TEMP1
+        lda cursor_pos
+        sec
+        sbc ZP_TEMP1
+        tax
+        txa
+        clc
+        adc #5
+        sta ZP_TEMP2
 rh_loop:
         cpx hand_count
+        bcs rh_done
+        cpx ZP_TEMP2
         bcs rh_done
 
         ; Check if this is cursor position
@@ -101,8 +139,12 @@ rh_no_cursor:
 
 rh_card:
         ; Get card value
+        txa
+        pha
         lda my_hand,x
         jsr render_card_short
+        pla
+        tax
 
         ; Check if selected
         jsr check_selected
@@ -130,50 +172,13 @@ hand_msg:
 ; Returns: C=1 if selected, C=0 if not
 ; -----------------------------------------------------------------------------
 check_selected:
-        txa
-        pha
-
-        cpx #8
-        bcs cs_high_byte
-
-        ; Low byte
-        lda #1
-cs_shift_lo:
-        cpx #0
-        beq cs_test_lo
-        asl
-        dex
-        bne cs_shift_lo
-cs_test_lo:
-        and selected_lo
+        lda selected_cards,x
         beq cs_not_sel
         sec
-        bcs cs_done
-
-cs_high_byte:
-        txa
-        sec
-        sbc #8
-        tax
-        lda #1
-cs_shift_hi:
-        cpx #0
-        beq cs_test_hi
-        asl
-        dex
-        bne cs_shift_hi
-cs_test_hi:
-        and selected_hi
-        beq cs_not_sel
-        sec
-        bcs cs_done
+        rts
 
 cs_not_sel:
         clc
-
-cs_done:
-        pla
-        tax
         rts
 
 ; -----------------------------------------------------------------------------
@@ -189,10 +194,8 @@ render_card_short:
         lda rank_chars,x
         jsr print_char
 
-        ; Get suit (high nibble >> 4)
+        ; Suit occupies bits 7-6 in the canonical card byte.
         pla
-        lsr
-        lsr
         lsr
         lsr
         and #$03
@@ -218,10 +221,8 @@ render_card:
         lda #' '
         jsr print_char
 
-        ; Get suit
+        ; Suit occupies bits 7-6 in the canonical card byte.
         pla
-        lsr
-        lsr
         lsr
         lsr
         and #$03
@@ -239,7 +240,7 @@ render_card:
 ; Card data
 rank_chars:
         .byte '?', 'A', '2', '3', '4', '5', '6', '7'
-        .byte '8', '9', 'T', 'J', 'Q', 'K', '?', '?'
+        .byte '8', '9', 'T', 'J', 'Q', 'K', 'A', '?'
 
 suit_chars:
         .byte 'H', 'D', 'C', 'S'

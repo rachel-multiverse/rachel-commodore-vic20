@@ -103,8 +103,10 @@ pi_digit:
         lda ZP_TEMP1
         asl                     ; x2
         asl                     ; x4
+        clc
         adc ZP_TEMP1            ; x5
         asl                     ; x10
+        clc
         adc ZP_TEMP2
         sta ZP_TEMP1
 
