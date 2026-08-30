@@ -14,16 +14,12 @@ NET_ERROR       = $80
 ; Initialize network interface
 ; -----------------------------------------------------------------------------
 net_init:
-        ; Configure VIA for serial communication
-        ; Port B for data, control lines on Port A
-
-        ; Set data direction - PB0-7 as input initially
+        ; The real C64 user-port WiFi modem maps receive to PB0 (pin C)
+        ; and transmit to the physical pin M. On a VIC-20 pin M is CB2,
+        ; not PA2, so drive it through the VIA peripheral-control register.
         lda #$00
         sta VIA1_DDRB
-
-        ; PA7 as output (TX), PA6 as input (RX)
-        lda #$80
-        sta VIA1_DDRA
+        jsr tx_high
 
         ; Initial state
         lda #0
@@ -224,10 +220,8 @@ serial_send:
         tya
         pha
 
-        ; Start bit (low)
-        lda VIA1_PORTA
-        and #$7F
-        sta VIA1_PORTA
+        ; Start bit (low on CB2/user-port pin M)
+        jsr tx_low
         jsr bit_delay
 
         ; 8 data bits
@@ -235,22 +229,18 @@ serial_send:
 ss_bit:
         lsr ZP_TEMP4
         bcc ss_low
-        lda VIA1_PORTA
-        ora #$80
-        bne ss_out
+        jsr tx_high
+        jmp ss_out_done
 ss_low:
-        lda VIA1_PORTA
-        and #$7F
+        jsr tx_low
 ss_out:
-        sta VIA1_PORTA
+ss_out_done:
         jsr bit_delay
         dex
         bne ss_bit
 
         ; Stop bit (high)
-        lda VIA1_PORTA
-        ora #$80
-        sta VIA1_PORTA
+        jsr tx_high
         jsr bit_delay
 
         pla
@@ -269,9 +259,9 @@ serial_recv:
         tya
         pha
 
-        ; Check for start bit (low on PA6)
-        lda VIA1_PORTA
-        and #$40
+        ; Check for start bit (low on PB0/user-port pin C)
+        lda VIA1_PORTB
+        and #$01
         bne sr_none
 
         ; Wait half bit time to sample in middle
@@ -284,8 +274,8 @@ serial_recv:
 
 sr_bit:
         jsr bit_delay
-        lda VIA1_PORTA
-        and #$40
+        lda VIA1_PORTB
+        and #$01
         beq sr_zero
         sec
         bcs sr_shift
@@ -330,6 +320,21 @@ half_bit_delay:
 hbd_loop:
         dey
         bne hbd_loop
+        rts
+
+; CB2 manual output modes occupy PCR bits 7..5: 110=low, 111=high.
+tx_low:
+        lda VIA1_PCR
+        and #$1f
+        ora #$c0
+        sta VIA1_PCR
+        rts
+
+tx_high:
+        lda VIA1_PCR
+        and #$1f
+        ora #$e0
+        sta VIA1_PCR
         rts
 
 ; -----------------------------------------------------------------------------

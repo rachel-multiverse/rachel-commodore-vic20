@@ -47,12 +47,14 @@ With 8KB expansion:
 ## Hardware Connection
 
 The WiFi modem connects to the VIC-20 user port:
-- PA7: TX (output)
-- PA6: RX (input)
+- User-port pin M / VIA CB2: TX (output)
+- User-port pin C / VIA PB0: RX (input)
 - GND: Ground
 
 Uses ESP-AT commands for ESP8266/ESP32 modems. The client waits for the
-`CIPSEND` prompt before transmitting and strips `+IPD`/status text by
+This pin mapping targets the real Sven Petersen C64 WiFi modem with the
+documented VIC-20 edge adapter. The driver waits for the ESP-AT `CIPSEND`
+prompt before transmitting and strips `+IPD`/status text by
 synchronising received data on the RUBP `RACH` magic.
 
 ## Platform ID

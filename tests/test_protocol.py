@@ -44,7 +44,17 @@ def test_prg_run_trampoline() -> None:
     assert data[17] == 0x78
 
 
+def test_real_vic20_user_port_pins() -> None:
+    source = (ROOT / "src/net/wifi.asm").read_text()
+    assert "VIA1_PORTB" in source
+    assert "and #$01" in source
+    assert "ora #$c0" in source
+    assert "ora #$e0" in source
+    assert "PA7 as output" not in source
+
+
 if __name__ == "__main__":
     test_wire_constants()
     test_prg_run_trampoline()
+    test_real_vic20_user_port_pins()
     print("VIC-20 RUBP/PRG conformance checks passed")
