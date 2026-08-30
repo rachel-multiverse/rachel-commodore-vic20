@@ -87,10 +87,10 @@ ml_check_sync:
         bne ml_check_turn
         jsr process_hand_sync
         jsr render_hand
-.ifdef E2E_AUTOPLAY
-        lda #0
-        sta autoplay_waiting
-.endif
+        lda server_sync_ack
+        beq ml_sync_no_ack
+        jsr send_sync_ack
+ml_sync_no_ack:
         jmp ml_input
 
 ml_check_turn:
@@ -475,7 +475,6 @@ ap_rank_scan:
         bne ap_rank_scan
 
 ap_play:
-        stx autoplay_played_index
         lda #1
         sta selected_cards,x
         lda my_hand,x
@@ -487,31 +486,9 @@ ap_play:
 ap_nominate:
         lda chosen_suit
 ap_send_play:
-        ; The accelerated emulator can consume an old recovery snapshot after
-        ; the host has already queued a newer turn. Production actions retain
-        ; their optimistic state hash; this transport/gameplay smoke driver
-        ; deliberately leaves hash-race coverage to the conformance tests.
-        pha
-        lda #0
-        sta state_hash_present
-        pla
         jsr send_play_cards
-        ; Keep the test driver's local hand monotonic even if an accelerated
-        ; run advances past the following private HAND_SYNC frame.
-        ldx autoplay_played_index
-ap_remove_card:
-        inx
-        cpx hand_count
-        bcs ap_removed
-        lda my_hand,x
-        sta my_hand-1,x
-        jmp ap_remove_card
-ap_removed:
-        dec hand_count
         rts
 ap_draw:
-        lda #0
-        sta state_hash_present
         jsr send_draw
 ap_done:
         rts
@@ -527,7 +504,5 @@ autoplay_card_suit:
         rts
 
 autoplay_waiting:
-        .byte 0
-autoplay_played_index:
         .byte 0
 .endif

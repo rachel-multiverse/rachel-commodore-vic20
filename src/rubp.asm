@@ -172,6 +172,10 @@ sh_name_done:
         lda #RACHEL_SPEC_VER
         sta tx_buffer+PAYLOAD_START+19
 
+        ; Advertise the existing SYNC_REQUEST acknowledgement extension.
+        lda #CAP_SYNC_ACK
+        sta tx_buffer+PAYLOAD_START+36
+
         jsr net_send
         rts
 
@@ -323,6 +327,34 @@ ssr_no_hash:
         jsr net_send
         rts
 
+; Acknowledge that both the public state and private hand snapshot were parsed.
+; The server validates the echoed hash before allowing this slow client to act.
+send_sync_ack:
+        lda #MSG_SYNC_REQUEST
+        jsr build_header
+        ldx #0
+ssa_turn:
+        lda turn_number,x
+        sta tx_buffer+PAYLOAD_START,x
+        inx
+        cpx #4
+        bne ssa_turn
+        lda #0
+        sta tx_buffer+PAYLOAD_START+4
+        lda #RACHEL_SPEC_VER
+        sta tx_buffer+PAYLOAD_START+5
+        lda #(SYNC_FLAG_HASH | SYNC_FLAG_ACK)
+        sta tx_buffer+PAYLOAD_START+6
+        ldx #0
+ssa_hash:
+        lda state_hash,x
+        sta tx_buffer+PAYLOAD_START+7,x
+        inx
+        cpx #8
+        bne ssa_hash
+        jsr net_send
+        rts
+
 ; -----------------------------------------------------------------------------
 ; Validate received message
 ; Returns: C=0 if valid, C=1 if invalid
@@ -448,6 +480,9 @@ process_welcome:
         sta game_id_lo
         lda rx_buffer+PAYLOAD_START+4
         sta player_count
+        lda rx_buffer+PAYLOAD_START+8
+        and #CAP_SYNC_ACK
+        sta server_sync_ack
         rts
 
 ; PLAYER_LIST is the repeatable lobby snapshot sent after WELCOME. Its header
@@ -463,6 +498,9 @@ process_player_list_welcome:
         sta game_id_hi
         lda rx_buffer+HDR_GAME_ID+1
         sta game_id_lo
+        lda rx_buffer+PAYLOAD_START+47
+        and #CAP_SYNC_ACK
+        sta server_sync_ack
         lda rx_buffer+PAYLOAD_START
         sta player_count
         rts
@@ -585,6 +623,7 @@ my_hand:            .res 32, 0
 turn_number:        .res 4, 0
 state_hash:         .res 8, 0
 state_hash_present: .byte 0
+server_sync_ack:     .byte 0
 game_over_flag:     .byte 0
 crc_hi:             .byte 0
 crc_lo:             .byte 0

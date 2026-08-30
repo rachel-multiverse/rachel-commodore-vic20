@@ -154,6 +154,10 @@ def test_recovery_and_action_metadata_are_wired() -> None:
     assert "wfg_sync:" in main
     assert "cmp #$40" in main
     assert "jsr send_sync_request" in main[main.index("wfg_loop:"):]
+    assert "sta tx_buffer+PAYLOAD_START+36" in protocol
+    assert "send_sync_ack:" in protocol
+    assert "#(SYNC_FLAG_HASH | SYNC_FLAG_ACK)" in protocol
+    assert "lda server_sync_ack" in main
 
     # The wire format permits at most four cards in one play action.
     assert "cmp #4" in input_source

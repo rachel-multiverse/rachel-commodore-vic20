@@ -113,6 +113,9 @@ MSG_ANNOUNCE    = $0D
 MSG_PLAYER_NAME = $0E
 MSG_HAND_SYNC   = $0F
 MSG_SYNC_REQUEST= $10
+CAP_SYNC_ACK     = $01
+SYNC_FLAG_HASH   = $01
+SYNC_FLAG_ACK    = $02
 
 ; -----------------------------------------------------------------------------
 ; Connection States
