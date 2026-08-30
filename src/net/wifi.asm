@@ -76,7 +76,7 @@ nc_fail:
 at_cipstart:
         .byte "AT+CIPSTART=", $22, "TCP", $22, ",", $22, 0
 at_port:
-        .byte $22, ",8765", 13, 0
+        .byte $22, ",6502", 13, 0
 
 ; -----------------------------------------------------------------------------
 ; Send IP address (4 octets separated by dots)
