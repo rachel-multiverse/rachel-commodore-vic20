@@ -77,7 +77,7 @@ MAGIC_0         = $52
 MAGIC_1         = $41
 MAGIC_2         = $43
 MAGIC_3         = $48
-PROTOCOL_VER    = 1
+PROTOCOL_VER    = 2
 RACHEL_SPEC_VER = 1
 
 ; Header offsets
@@ -87,7 +87,8 @@ HDR_TYPE        = 5             ; 1 byte
 HDR_SEQ         = 6             ; 2 bytes
 HDR_PLAYER_ID   = 8             ; 2 bytes
 HDR_GAME_ID     = 10            ; 2 bytes
-HDR_TIMESTAMP   = 12            ; 4 bytes (zero when no clock is available)
+HDR_TIMESTAMP   = 12            ; 2 bytes in RUBP v2 (zero without a clock)
+HDR_CRC         = 14            ; CRC-16/CCITT-FALSE, big-endian
 PAYLOAD_START   = 16
 PAYLOAD_SIZE    = 48
 

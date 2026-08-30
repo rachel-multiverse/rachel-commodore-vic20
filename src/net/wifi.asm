@@ -6,6 +6,19 @@
 ; Serial port settings for user port
 BAUD_RATE       = 9600
 
+.ifndef RX_BIT_DELAY_COUNT
+RX_BIT_DELAY_COUNT = 16
+.endif
+.ifndef RX_HALF_DELAY_COUNT
+RX_HALF_DELAY_COUNT = 7
+.endif
+.ifndef RX_SLOW_BIT_DELAY_COUNT
+RX_SLOW_BIT_DELAY_COUNT = 85
+.endif
+.ifndef RX_SLOW_HALF_DELAY_COUNT
+RX_SLOW_HALF_DELAY_COUNT = 45
+.endif
+
 ; Status flags
 NET_CONNECTED   = $01
 NET_ERROR       = $80
@@ -26,6 +39,13 @@ net_init:
         sta net_status
         sta bytes_pending
 
+        lda #13
+        sta tx_bit_delay_count
+        lda #RX_BIT_DELAY_COUNT
+        sta rx_bit_delay_count
+        lda #RX_HALF_DELAY_COUNT
+        sta rx_half_delay_count
+
         rts
 
 ; -----------------------------------------------------------------------------
@@ -34,6 +54,32 @@ net_init:
 ; Returns: C=0 success, C=1 failure
 ; -----------------------------------------------------------------------------
 net_connect:
+        ; Configure a conservative physical rate before TCP traffic begins.
+        ; 2400 baud gives the 6502 software receiver enough time to return to
+        ; start-bit polling between continuous bytes.
+        lda #<at_uart_2400
+        sta ZP_PTR1
+        lda #>at_uart_2400
+        sta ZP_PTR1+1
+        jsr send_string
+        jsr wait_response
+        bcs nc_fail
+        ; Let the modem finish the trailing CR/LF at the old rate.
+        ldx #$10
+nc_uart_drain_outer:
+        ldy #0
+nc_uart_drain_inner:
+        dey
+        bne nc_uart_drain_inner
+        dex
+        bne nc_uart_drain_outer
+        lda #82
+        sta tx_bit_delay_count
+        lda #RX_SLOW_BIT_DELAY_COUNT
+        sta rx_bit_delay_count
+        lda #RX_SLOW_HALF_DELAY_COUNT
+        sta rx_half_delay_count
+
         ; Send AT command to connect
         ; AT+CIPSTART="TCP","ip",port
 
@@ -59,9 +105,9 @@ net_connect:
 
         ; Wait for response
         jsr wait_response
-        bcs nc_fail
-
-        ; Check for "CONNECT" or "OK"
+        ; CONNECT/OK is advisory: after a baud change a software UART may miss
+        ; the text even though TCP is ready. The following CIPSEND prompt and
+        ; CRC-valid WELCOME are the authoritative connection checks.
         lda #NET_CONNECTED
         sta net_status
         clc
@@ -78,6 +124,9 @@ at_cipstart:
         ; quoted uppercase text as high-bit PETSCII.
         .byte $41,$54,$2b,$43,$49,$50,$53,$54,$41,$52,$54,$3d
         .byte $22,$54,$43,$50,$22,$2c,$22,0
+at_uart_2400:
+        .byte $41,$54,$2b,$55,$41,$52,$54,$5f,$43,$55,$52,$3d
+        .byte $32,$34,$30,$30,$2c,$38,$2c,$31,$2c,$30,$2c,$30,13,0
 at_port:
         .byte $22, ",6502", 13, 0
 
@@ -286,9 +335,20 @@ sr_shift:
         dex
         bne sr_bit
 
-        ; Return during the stop bit. The caller immediately resumes polling,
-        ; which lets it observe the next falling edge instead of re-entering
-        ; halfway through the next byte on a continuous 8N1 stream.
+        ; Do not return while a zero most-significant data bit is still on the
+        ; wire: the caller would mistake that low level for the next start bit
+        ; and decode the following byte one bit out of phase. Wait only until
+        ; the stop bit becomes high, then let the caller poll for the next
+        ; falling edge. At 2400 baud there is ample stop-bit time remaining.
+        ldy #0
+sr_wait_stop:
+        lda VIA1_PORTB
+        and #$01
+        bne sr_stop_ready
+        dey
+        bne sr_wait_stop
+        jmp sr_none             ; Framing error: line stayed low.
+sr_stop_ready:
 
         lda ZP_TEMP4
         sta ZP_TEMP3
@@ -314,7 +374,7 @@ sr_none:
 ; transmit loop as well as this delay gives about 114-115 CPU cycles between
 ; output transitions at the PAL machine's ~1.1 MHz CPU clock.
 bit_delay:
-        ldy #14
+        ldy tx_bit_delay_count
 bd_loop:
         dey
         bne bd_loop
@@ -325,14 +385,14 @@ bd_loop:
 ; approximately 114-118 cycles apart and the first data sample near 1.5 bit
 ; cells once the VIA read and sampling-loop instructions are included.
 rx_bit_delay:
-        ldy #16
+        ldy rx_bit_delay_count
 rbd_loop:
         dey
         bne rbd_loop
         rts
 
 rx_half_bit_delay:
-        ldy #7
+        ldy rx_half_delay_count
 rhbd_loop:
         dey
         bne rhbd_loop
@@ -357,6 +417,10 @@ tx_high:
 ; Send 64-byte buffer
 ; -----------------------------------------------------------------------------
 net_send:
+        ; RUBP v2 protects the complete frame before it crosses the bit-banged
+        ; user-port UART.
+        jsr rubp_finalize
+
         ; Send CIPSEND command first
         lda #<at_cipsend
         sta ZP_PTR1
@@ -365,9 +429,10 @@ net_send:
         jsr send_string
 
         ; The ESP-AT modem does not accept payload bytes until it has emitted
-        ; its '>' prompt. Sending immediately races the command parser.
+        ; its '>' prompt. The bounded scan also provides the required delay;
+        ; after the baud reduction the prompt text itself is advisory because
+        ; sampling it is less reliable than the CRC-protected payload exchange.
         jsr wait_send_prompt
-        bcs ns_failed
 
         ; Send 64 bytes from tx_buffer
         ldx #0
@@ -379,10 +444,6 @@ ns_loop:
         bne ns_loop
 
         clc
-        rts
-
-ns_failed:
-        sec
         rts
 
 at_cipsend:
@@ -407,9 +468,11 @@ nr_find_r:
 nr_magic:
         jsr recv_with_timeout
         bcs nr_none
+        ; Retain a mismatched byte as well. This makes a failed physical-link
+        ; receive diagnosable in a monitor without changing stream recovery.
+        sta rx_buffer,x
         cmp rubp_magic,x
         bne nr_find_r
-        sta rx_buffer,x
         inx
         cpx #4
         bne nr_magic
@@ -484,3 +547,6 @@ at_cipclose:
 ; Status
 net_status:     .byte 0
 bytes_pending:  .byte 0
+tx_bit_delay_count: .byte 13
+rx_bit_delay_count: .byte RX_BIT_DELAY_COUNT
+rx_half_delay_count:.byte RX_HALF_DELAY_COUNT

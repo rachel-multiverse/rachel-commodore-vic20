@@ -33,7 +33,8 @@ def test_wire_constants() -> None:
         "MSG_PLAYER_WON": 10, "MSG_ERROR": 11, "MSG_HAND_SYNC": 15,
         "HDR_VERSION": 4, "HDR_TYPE": 5, "HDR_SEQ": 6,
         "HDR_PLAYER_ID": 8, "HDR_GAME_ID": 10, "HDR_TIMESTAMP": 12,
-        "PAYLOAD_START": 16, "PAYLOAD_SIZE": 48, "RACHEL_SPEC_VER": 1,
+        "HDR_CRC": 14, "PAYLOAD_START": 16, "PAYLOAD_SIZE": 48,
+        "PROTOCOL_VER": 2, "RACHEL_SPEC_VER": 1,
     }
     assert {key: actual[key] for key in expected} == expected
 
@@ -53,9 +54,9 @@ def test_real_vic20_user_port_pins() -> None:
     assert "and #$01" in source
     assert "ora #$c0" in source
     assert "ora #$e0" in source
-    assert "bit_delay:\n        ldy #14" in source
-    assert "rx_bit_delay:\n        ldy #16" in source
-    assert "rx_half_bit_delay:\n        ldy #7" in source
+    assert "bit_delay:\n        ldy tx_bit_delay_count" in source
+    assert "RX_BIT_DELAY_COUNT = 16" in source
+    assert "RX_HALF_DELAY_COUNT = 7" in source
 
 
 def test_keyboard_irqs_and_serial_critical_sections() -> None:
@@ -65,8 +66,14 @@ def test_keyboard_irqs_and_serial_critical_sections() -> None:
     assert "; for the duration of each timing-critical 8N1 transfer.\n        cli" in main
     assert "serial_send:\n        php\n        sei" in serial
     assert "serial_recv:\n        php\n        sei" in serial
-    assert "rx_bit_delay:\n        ldy #16" in serial
-    assert "rx_half_bit_delay:\n        ldy #7" in serial
+    assert "rx_bit_delay:\n        ldy rx_bit_delay_count" in serial
+    assert "rx_half_bit_delay:\n        ldy rx_half_delay_count" in serial
+    assert "at_uart_2400:" in serial
+    assert "sta tx_bit_delay_count" in serial
+    assert "sta rx_bit_delay_count" in serial
+    assert "sr_wait_stop:" in serial
+    assert "bne sr_wait_stop" in serial
+    assert "Framing error" in serial
     assert serial.count("        plp") >= 3
     input_source = (ROOT / "src/input.asm").read_text()
     connect = (ROOT / "src/connect.asm").read_text()
@@ -135,8 +142,7 @@ def test_recovery_and_action_metadata_are_wired() -> None:
     # Recovery metadata is not discarded and ERROR requests a fresh pair.
     assert "process_hand_sync:" in protocol
     assert "rx_buffer+PAYLOAD_START+33,x" in protocol
-    assert "Do not claim hash validation" in protocol
-    assert protocol.count("sta state_hash_present") >= 3
+    assert "rx_buffer+PAYLOAD_START+40,x" in protocol
     assert "jsr send_sync_request" in main
     assert "cmp #MSG_PLAYER_LIST" in main
     assert "jsr process_player_list_welcome" in main
@@ -149,6 +155,20 @@ def test_recovery_and_action_metadata_are_wired() -> None:
     # The wire format permits at most four cards in one play action.
     assert "cmp #4" in input_source
     assert "bcs ts_done" in input_source
+
+
+def test_rubp_v2_crc_is_generated_and_required() -> None:
+    protocol = (ROOT / "src/rubp.asm").read_text()
+    network = (ROOT / "src/net/wifi.asm").read_text()
+    assert "rubp_finalize:" in protocol
+    assert "eor #$21" in protocol
+    assert "eor #$10" in protocol
+    assert "cpy #64" in protocol
+    assert "crc_expected_hi" in protocol
+    assert "cmp crc_hi" in protocol
+    assert "cmp crc_lo" in protocol
+    assert "net_send:\n        ; RUBP v2" in network
+    assert "jsr rubp_finalize" in network
 
 
 def test_canonical_fixture_when_supplied_by_ci() -> None:
@@ -172,5 +192,6 @@ if __name__ == "__main__":
     test_connect_response_uses_unambiguous_stream_terminator()
     test_screen_clear_terminates_and_text_uses_screen_codes()
     test_recovery_and_action_metadata_are_wired()
+    test_rubp_v2_crc_is_generated_and_required()
     test_canonical_fixture_when_supplied_by_ci()
     print("VIC-20 RUBP/PRG conformance checks passed")

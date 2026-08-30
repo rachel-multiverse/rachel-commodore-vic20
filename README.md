@@ -65,9 +65,13 @@ VIC-20 = `0x000C` (12)
 
 ## Protocol
 
-Uses canonical RUBP v1 (Rachel Unified Binary Protocol) 64-byte messages,
+Uses canonical RUBP v2 (Rachel Unified Binary Protocol) 64-byte messages,
 including the `WELCOME`, private `GAME_START`/`CARD_DRAWN`/`HAND_SYNC`, and
 public `GAME_STATE` flows. Action messages carry RachelSpec v1 metadata.
+Every v2 frame carries a CRC-16/CCITT-FALSE checksum over the complete frame;
+corrupt inbound frames are discarded and every outbound frame is finalised
+immediately before transmission. The ESP-AT link is reduced to 2400 baud before
+TCP traffic so the VIC-20 software UART can reliably receive continuous frames.
 Full specification: [rachel-multiverse/protocol](https://github.com/rachel-multiverse/protocol).
 
 GitHub Actions builds the PRG and verifies its BASIC `RUN` trampoline, memory
@@ -82,11 +86,9 @@ turn advancement, and rendering the resulting eight-card hand. The reproducible
 input sequence is in `tests/emu198x_draw_e2e.json`; run the Go server locally
 with one AI opponent and pass that script to Emu198x's VIC-20 runner.
 
-The VIC-20 deliberately omits the optional observed-state hash from actions.
-RUBP frames have no checksum and this software UART therefore cannot establish
-that every byte of an eight-byte hash is intact. The server still validates the
-action against the authoritative game rules and follows it with fresh public
-and private state.
+The checksum lets the VIC-20 safely retain the server's authoritative state hash
+and include it with play, draw and recovery requests. The server can therefore
+reject actions based on stale state instead of relying on syntax alone.
 
 ## Screen Layout
 

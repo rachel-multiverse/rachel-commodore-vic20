@@ -91,6 +91,58 @@ bh_clear:
         rts
 
 ; -----------------------------------------------------------------------------
+; Finalise and validate RUBP v2 CRC-16/CCITT-FALSE frames.
+; Polynomial $1021, initial value $FFFF, no reflection, xorout $0000.
+; -----------------------------------------------------------------------------
+rubp_finalize:
+        lda #0
+        sta tx_buffer+HDR_CRC
+        sta tx_buffer+HDR_CRC+1
+        lda #<tx_buffer
+        sta ZP_PTR1
+        lda #>tx_buffer
+        sta ZP_PTR1+1
+        jsr rubp_crc16
+        lda crc_hi
+        sta tx_buffer+HDR_CRC
+        lda crc_lo
+        sta tx_buffer+HDR_CRC+1
+        rts
+
+; ZP_PTR1 points at one 64-byte frame. Result is crc_hi:crc_lo.
+rubp_crc16:
+        lda #$ff
+        sta crc_hi
+        sta crc_lo
+        ldy #0
+rc_byte:
+        lda (ZP_PTR1),y
+        eor crc_hi
+        sta crc_hi
+        ldx #8
+rc_bit:
+        lda crc_hi
+        and #$80
+        sta crc_msb
+        asl crc_lo
+        rol crc_hi
+        lda crc_msb
+        beq rc_no_poly
+        lda crc_lo
+        eor #$21
+        sta crc_lo
+        lda crc_hi
+        eor #$10
+        sta crc_hi
+rc_no_poly:
+        dex
+        bne rc_bit
+        iny
+        cpy #64
+        bne rc_byte
+        rts
+
+; -----------------------------------------------------------------------------
 ; Send HELLO message with player name and platform ID
 ; -----------------------------------------------------------------------------
 send_hello:
@@ -293,6 +345,31 @@ rubp_validate:
         cmp #PROTOCOL_VER
         bne rv_fail
 
+        ; Preserve the received checksum, compute over a zero checksum field,
+        ; then restore the frame before any payload parser sees it.
+        lda rx_buffer+HDR_CRC
+        sta crc_expected_hi
+        lda rx_buffer+HDR_CRC+1
+        sta crc_expected_lo
+        lda #0
+        sta rx_buffer+HDR_CRC
+        sta rx_buffer+HDR_CRC+1
+        lda #<rx_buffer
+        sta ZP_PTR1
+        lda #>rx_buffer
+        sta ZP_PTR1+1
+        jsr rubp_crc16
+        lda crc_expected_hi
+        sta rx_buffer+HDR_CRC
+        lda crc_expected_lo
+        sta rx_buffer+HDR_CRC+1
+        lda crc_expected_hi
+        cmp crc_hi
+        bne rv_fail
+        lda crc_expected_lo
+        cmp crc_lo
+        bne rv_fail
+
         clc
         rts
 
@@ -343,11 +420,17 @@ pgs_turn:
         inx
         cpx #4
         bne pgs_turn
-        ; RUBP hashes are optional. This bit-banged client has no frame CRC,
-        ; so a syntactically valid frame cannot prove that all eight hash bytes
-        ; arrived intact. Do not claim hash validation on outbound actions.
-        lda #0
+        lda rx_buffer+PAYLOAD_START+23
+        and #1
         sta state_hash_present
+        beq pgs_done
+        ldx #0
+pgs_hash:
+        lda rx_buffer+PAYLOAD_START+24,x
+        sta state_hash,x
+        inx
+        cpx #8
+        bne pgs_hash
 pgs_done:
 
         rts
@@ -433,10 +516,17 @@ phs_turn:
         inx
         cpx #4
         bne phs_turn
-        ; See process_game_state: omit the optional observed hash when the
-        ; transport cannot establish whole-frame integrity.
-        lda #0
+        lda rx_buffer+PAYLOAD_START+39
+        and #1
         sta state_hash_present
+        beq phs_done
+        ldx #0
+phs_hash:
+        lda rx_buffer+PAYLOAD_START+40,x
+        sta state_hash,x
+        inx
+        cpx #8
+        bne phs_hash
 phs_done:
         rts
 
@@ -473,6 +563,11 @@ turn_number:        .res 4, 0
 state_hash:         .res 8, 0
 state_hash_present: .byte 0
 game_over_flag:     .byte 0
+crc_hi:             .byte 0
+crc_lo:             .byte 0
+crc_msb:            .byte 0
+crc_expected_hi:    .byte 0
+crc_expected_lo:    .byte 0
 
 ; Buffers
 tx_buffer:      .res 64, 0
