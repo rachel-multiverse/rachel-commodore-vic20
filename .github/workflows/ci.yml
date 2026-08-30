@@ -19,10 +19,14 @@ jobs:
       - name: Install cc65
         run: sudo apt-get update && sudo apt-get install --yes cc65
       - name: Build PRG and run conformance checks
-        run: make test
+        run: make test e2e-prg
         env:
           RUBP_FIXTURE: canonical-protocol/specs/fixtures/rubp-messages-v1.json
       - uses: actions/upload-artifact@v4
         with:
           name: rachel-vic20-prg
           path: build/rachel.prg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rachel-vic20-emulator-e2e-prg
+          path: build/rachel-e2e.prg

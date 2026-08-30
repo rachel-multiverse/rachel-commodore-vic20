@@ -208,6 +208,10 @@ render_card_short:
         pla
         lsr
         lsr
+        lsr
+        lsr
+        lsr
+        lsr
         and #$03
         tax
         lda suit_chars,x
@@ -233,6 +237,10 @@ render_card:
 
         ; Suit occupies bits 7-6 in the canonical card byte.
         pla
+        lsr
+        lsr
+        lsr
+        lsr
         lsr
         lsr
         and #$03

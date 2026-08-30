@@ -87,6 +87,10 @@ ml_check_sync:
         bne ml_check_turn
         jsr process_hand_sync
         jsr render_hand
+.ifdef E2E_AUTOPLAY
+        lda #0
+        sta autoplay_waiting
+.endif
         jmp ml_input
 
 ml_check_turn:
@@ -94,6 +98,10 @@ ml_check_turn:
         bne ml_check_error
         jsr process_turn_start
         jsr render_game
+.ifdef E2E_AUTOPLAY
+        lda #0
+        sta autoplay_waiting
+.endif
         jmp ml_input
 
 ml_check_error:
@@ -105,14 +113,21 @@ ml_check_error:
 ml_check_end:
         cmp #MSG_PLAYER_WON
         bne ml_no_msg
-        jmp game_over
+        jmp player_won
 
 ml_no_msg:
 ml_input:
         ; Check if it's our turn
         lda current_turn
         cmp my_index
-        bne main_loop
+        beq ml_our_turn
+        jmp main_loop
+ml_our_turn:
+
+.ifdef E2E_AUTOPLAY
+        jsr autoplay_turn
+        jmp main_loop
+.endif
 
         ; Handle input
         jsr get_input
@@ -303,7 +318,9 @@ wfg_loop:
         lda #0
         sta wait_game_lo
         sta wait_game_hi
+.ifndef E2E_AUTOPLAY
         jsr send_sync_request
+.endif
         jmp wfg_loop
 wfg_message:
         lda #0
@@ -351,7 +368,166 @@ wait_game_hi:
 ; -----------------------------------------------------------------------------
 .include "display.asm"
 .include "input.asm"
+.include "net/wifi.asm"
 .include "rubp.asm"
 .include "game.asm"
 .include "connect.asm"
-.include "net/wifi.asm"
+
+player_won:
+        lda #1
+        sta game_over_flag
+        jmp main::game_over
+
+.ifdef E2E_AUTOPLAY
+; Test-build policy that drives the ordinary action encoders through a complete
+; server-authoritative game. It deliberately plays only one card at a time.
+; Production builds contain none of this code.
+autoplay_turn:
+        lda autoplay_waiting
+        beq ap_ready
+        jmp ap_done
+ap_ready:
+        lda #1
+        sta autoplay_waiting
+
+        ; An active draw/skip attack can only be countered by the rank on top.
+        lda pending_draws
+        ora pending_skips
+        beq ap_normal
+        lda discard_top
+        and #$0f
+        sta ZP_TEMP1
+        jmp ap_find_rank
+
+ap_normal:
+        ldx #0
+ap_scan:
+        cpx hand_count
+        bcc ap_have_card
+        jmp ap_draw
+ap_have_card:
+        lda my_hand,x
+        and #$0f
+        cmp #RANK_ACE
+        beq ap_ace
+        sta ZP_TEMP1
+        lda nominated_suit_recv
+        cmp #$ff
+        bne ap_match_nomination
+        lda discard_top
+        and #$0f
+        cmp ZP_TEMP1
+        beq ap_play
+        lda my_hand,x
+        jsr autoplay_card_suit
+        sta ZP_TEMP1
+        lda discard_top
+        jsr autoplay_card_suit
+        cmp ZP_TEMP1
+        beq ap_play
+        inx
+        bne ap_scan
+
+ap_match_nomination:
+        sta ZP_TEMP1
+        lda my_hand,x
+        jsr autoplay_card_suit
+        cmp ZP_TEMP1
+        beq ap_play
+        inx
+        bne ap_scan
+
+ap_ace:
+        ; An Ace is a wildcard only while a previous Ace's nomination is live;
+        ; otherwise it must match the top card's suit or rank like any card.
+        lda nominated_suit_recv
+        cmp #$ff
+        bne ap_play_ace
+        lda discard_top
+        and #$0f
+        cmp #RANK_ACE
+        beq ap_play_ace
+        lda my_hand,x
+        jsr autoplay_card_suit
+        sta ZP_TEMP1
+        lda discard_top
+        jsr autoplay_card_suit
+        cmp ZP_TEMP1
+        bne ap_next
+ap_play_ace:
+        lda #SUIT_HEARTS
+        sta chosen_suit
+        jmp ap_play
+ap_next:
+        inx
+        bne ap_scan
+
+ap_find_rank:
+        ldx #0
+ap_rank_scan:
+        cpx hand_count
+        bcs ap_draw
+        lda my_hand,x
+        and #$0f
+        cmp ZP_TEMP1
+        beq ap_play
+        inx
+        bne ap_rank_scan
+
+ap_play:
+        stx autoplay_played_index
+        lda #1
+        sta selected_cards,x
+        lda my_hand,x
+        and #$0f
+        cmp #RANK_ACE
+        beq ap_nominate
+        lda #$ff
+        bne ap_send_play
+ap_nominate:
+        lda chosen_suit
+ap_send_play:
+        ; The accelerated emulator can consume an old recovery snapshot after
+        ; the host has already queued a newer turn. Production actions retain
+        ; their optimistic state hash; this transport/gameplay smoke driver
+        ; deliberately leaves hash-race coverage to the conformance tests.
+        pha
+        lda #0
+        sta state_hash_present
+        pla
+        jsr send_play_cards
+        ; Keep the test driver's local hand monotonic even if an accelerated
+        ; run advances past the following private HAND_SYNC frame.
+        ldx autoplay_played_index
+ap_remove_card:
+        inx
+        cpx hand_count
+        bcs ap_removed
+        lda my_hand,x
+        sta my_hand-1,x
+        jmp ap_remove_card
+ap_removed:
+        dec hand_count
+        rts
+ap_draw:
+        lda #0
+        sta state_hash_present
+        jsr send_draw
+ap_done:
+        rts
+
+autoplay_card_suit:
+        lsr
+        lsr
+        lsr
+        lsr
+        lsr
+        lsr
+        and #$03
+        rts
+
+autoplay_waiting:
+        .byte 0
+autoplay_played_index:
+        .byte 0
+.endif

@@ -143,6 +143,9 @@ def test_recovery_and_action_metadata_are_wired() -> None:
     assert "process_hand_sync:" in protocol
     assert "rx_buffer+PAYLOAD_START+33,x" in protocol
     assert "rx_buffer+PAYLOAD_START+40,x" in protocol
+    assert "rx_buffer+PAYLOAD_START+10,x" in protocol
+    assert "sta pending_draws" in protocol[protocol.index("process_turn_start:"):]
+    assert "sta pending_skips" in protocol[protocol.index("process_turn_start:"):]
     assert "jsr send_sync_request" in main
     assert "cmp #MSG_PLAYER_LIST" in main
     assert "jsr process_player_list_welcome" in main
@@ -150,11 +153,19 @@ def test_recovery_and_action_metadata_are_wired() -> None:
     assert "cmp #MSG_HAND_SYNC" in main
     assert "wfg_sync:" in main
     assert "cmp #$40" in main
-    assert "jsr send_sync_request\n        jmp wfg_loop" in main
+    assert "jsr send_sync_request" in main[main.index("wfg_loop:"):]
 
     # The wire format permits at most four cards in one play action.
     assert "cmp #4" in input_source
     assert "bcs ts_done" in input_source
+
+
+def test_card_suits_use_the_wire_format_high_bits() -> None:
+    game = (ROOT / "src/game.asm").read_text()
+    short = game[game.index("render_card_short:"):game.index("render_card:")]
+    full = game[game.index("render_card:"):game.index("rank_chars:")]
+    assert short.count("        lsr") == 6
+    assert full.count("        lsr") >= 6
 
 
 def test_rubp_v2_crc_is_generated_and_required() -> None:
@@ -192,6 +203,7 @@ if __name__ == "__main__":
     test_connect_response_uses_unambiguous_stream_terminator()
     test_screen_clear_terminates_and_text_uses_screen_codes()
     test_recovery_and_action_metadata_are_wired()
+    test_card_suits_use_the_wire_format_high_bits()
     test_rubp_v2_crc_is_generated_and_required()
     test_canonical_fixture_when_supplied_by_ci()
     print("VIC-20 RUBP/PRG conformance checks passed")

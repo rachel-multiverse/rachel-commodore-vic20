@@ -86,6 +86,10 @@ turn advancement, and rendering the resulting eight-card hand. The reproducible
 input sequence is in `tests/emu198x_draw_e2e.json`; run the Go server locally
 with one AI opponent and pass that script to Emu198x's VIC-20 runner.
 
+GitHub Actions also compiles a test-only one-card autoplay PRG. Production PRGs
+contain no autoplay code. A complete emulator/server run remains a local test
+because VIC-20 ROM images cannot be redistributed to hosted runners.
+
 The checksum lets the VIC-20 safely retain the server's authoritative state hash
 and include it with play, draw and recovery requests. The server can therefore
 reject actions based on stale state instead of relying on syntax alone.

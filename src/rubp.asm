@@ -533,6 +533,29 @@ phs_done:
 process_turn_start:
         lda rx_buffer+PAYLOAD_START
         sta current_turn
+        ldx #0
+pts_turn_number:
+        lda rx_buffer+PAYLOAD_START+1,x
+        sta turn_number,x
+        inx
+        cpx #4
+        bne pts_turn_number
+        lda rx_buffer+PAYLOAD_START+5
+        sta pending_draws
+        lda rx_buffer+PAYLOAD_START+6
+        sta pending_skips
+        lda rx_buffer+PAYLOAD_START+9
+        and #1
+        sta state_hash_present
+        beq pts_done
+        ldx #0
+pts_hash:
+        lda rx_buffer+PAYLOAD_START+10,x
+        sta state_hash,x
+        inx
+        cpx #8
+        bne pts_hash
+pts_done:
         rts
 
 ; -----------------------------------------------------------------------------

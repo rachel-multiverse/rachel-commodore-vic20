@@ -9,11 +9,13 @@ SRC_DIR = src
 
 TARGET = $(BUILD_DIR)/rachel.prg
 MAP = $(BUILD_DIR)/rachel.map
+E2E_TARGET = $(BUILD_DIR)/rachel-e2e.prg
+E2E_OBJECT = $(BUILD_DIR)/main-e2e.o
 
 # VIC-20 with 8KB expansion config
 CONFIG = vic20-8k.cfg
 
-.PHONY: all test clean
+.PHONY: all test e2e-prg clean
 
 all: $(BUILD_DIR) $(TARGET)
 	@echo "Built: $(TARGET)"
@@ -30,6 +32,14 @@ $(TARGET): $(BUILD_DIR)/main.o $(CONFIG)
 
 test: all
 	python3 tests/test_protocol.py
+
+e2e-prg: $(BUILD_DIR) $(E2E_TARGET)
+
+$(E2E_OBJECT): $(SRC_DIR)/main.asm $(SRC_DIR)/*.asm $(SRC_DIR)/net/*.asm
+	$(CA65) -t vic20 -D E2E_AUTOPLAY=1 -o $@ $(SRC_DIR)/main.asm
+
+$(E2E_TARGET): $(E2E_OBJECT) $(CONFIG)
+	$(LD65) -C $(CONFIG) -o $@ $(E2E_OBJECT) vic20.lib
 
 clean:
 	rm -rf $(BUILD_DIR)
