@@ -72,10 +72,11 @@ KEY_DELETE      = 20
 ; -----------------------------------------------------------------------------
 ; RUBP Protocol Constants
 ; -----------------------------------------------------------------------------
-MAGIC_0         = 'R'
-MAGIC_1         = 'A'
-MAGIC_2         = 'C'
-MAGIC_3         = 'H'
+; RUBP is ASCII. VIC character literals use high-bit PETSCII.
+MAGIC_0         = $52
+MAGIC_1         = $41
+MAGIC_2         = $43
+MAGIC_3         = $48
 PROTOCOL_VER    = 1
 RACHEL_SPEC_VER = 1
 

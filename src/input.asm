@@ -27,24 +27,30 @@ get_input:
         rts
 
 ; -----------------------------------------------------------------------------
-; Input line into buffer
-; Input: ZP_PTR1 = buffer address, X = max length
+; Input one server-address line into ip_buffer.
 ; Returns: Y = actual length
 ; -----------------------------------------------------------------------------
 input_line:
         ldy #0
 il_loop:
+        ; GETIN/KERNAL IRQ handling does not promise to preserve our index.
+        tya
+        pha
         jsr wait_key
+        tax
+        pla
+        tay
+        txa
         cmp #KEY_RETURN
         beq il_done
         cmp #KEY_DELETE
         beq il_delete
 
         ; Regular character
-        cpy ZP_TEMP3            ; Max length
+        cpy #20                 ; Max length
         bcs il_loop             ; Buffer full
 
-        sta (ZP_PTR1),y
+        sta ip_buffer,y
         jsr print_char
         iny
         jmp il_loop
@@ -62,7 +68,7 @@ il_delete:
 
 il_done:
         lda #0
-        sta (ZP_PTR1),y         ; Null terminate
+        sta ip_buffer,y         ; Null terminate
         rts
 
 ; -----------------------------------------------------------------------------

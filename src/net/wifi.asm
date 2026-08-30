@@ -74,7 +74,10 @@ nc_fail:
         rts
 
 at_cipstart:
-        .byte "AT+CIPSTART=", $22, "TCP", $22, ",", $22, 0
+        ; Wire strings must be explicit ASCII: ca65's VIC-20 charmap encodes
+        ; quoted uppercase text as high-bit PETSCII.
+        .byte $41,$54,$2b,$43,$49,$50,$53,$54,$41,$52,$54,$3d
+        .byte $22,$54,$43,$50,$22,$2c,$22,0
 at_port:
         .byte $22, ",6502", 13, 0
 
@@ -88,7 +91,7 @@ si_loop:
         jsr send_decimal
         cpx #3
         bcs si_done
-        lda #'.'
+        lda #$2e                 ; ASCII '.'
         jsr serial_send
         inx
         bne si_loop
@@ -127,7 +130,7 @@ sd_units:
         lda ZP_TEMP2
         beq sd_skip_h
         clc
-        adc #'0'
+        adc #$30                 ; ASCII '0'
         jsr serial_send
 sd_skip_h:
 
@@ -137,14 +140,14 @@ sd_skip_h:
         beq sd_skip_t
         lda ZP_TEMP3
         clc
-        adc #'0'
+        adc #$30                 ; ASCII '0'
         jsr serial_send
 sd_skip_t:
 
         ; Always print units
         lda ZP_TEMP1
         clc
-        adc #'0'
+        adc #$30                 ; ASCII '0'
         jsr serial_send
         rts
 
@@ -176,23 +179,32 @@ wr_loop:
         jsr serial_recv
         bcs wr_check_timeout
 
-        ; Got a byte - check for "OK" or "ERROR"
-        cmp #'O'
+        ; Got a byte - scan for the complete "OK" token. Do not treat a
+        ; standalone 'E' as ERROR: successful ESP replies include CONNECT.
+        cmp #$4f                 ; ASCII 'O'
         beq wr_maybe_ok
-        cmp #'E'
-        beq wr_maybe_err
         jmp wr_loop
 
 wr_maybe_ok:
         jsr serial_recv
-        bcs wr_loop
-        cmp #'K'
+        bcs wr_wait_k_timeout
+        cmp #$4b                 ; ASCII 'K'
+        beq wr_success
+        cmp #$4e                 ; ASCII 'N' completes CONNECT's "ON"
         bne wr_loop
+wr_success:
         clc
         rts
 
-wr_maybe_err:
-        ; Assume error
+wr_wait_k_timeout:
+        ; serial_recv is deliberately non-blocking. Preserve the fact that an
+        ; 'O' was seen while waiting for the following byte to begin.
+        inc timeout_lo
+        bne wr_maybe_ok
+        inc timeout_hi
+        lda timeout_hi
+        cmp #$10
+        bcc wr_maybe_ok
         sec
         rts
 
@@ -214,6 +226,8 @@ timeout_hi:     .byte 0
 ; Input: A = byte
 ; -----------------------------------------------------------------------------
 serial_send:
+        php
+        sei
         sta ZP_TEMP4
         txa
         pha
@@ -247,6 +261,7 @@ ss_out_done:
         tay
         pla
         tax
+        plp
         rts
 
 ; -----------------------------------------------------------------------------
@@ -254,6 +269,8 @@ ss_out_done:
 ; Returns: A = byte, C=0 success, C=1 no data
 ; -----------------------------------------------------------------------------
 serial_recv:
+        php
+        sei
         txa
         pha
         tya
@@ -296,6 +313,7 @@ sr_shift:
         pla
         tax
         lda ZP_TEMP3
+        plp
         clc
         rts
 
@@ -304,6 +322,7 @@ sr_none:
         tay
         pla
         tax
+        plp
         sec
         rts
 
@@ -372,7 +391,7 @@ ns_failed:
         rts
 
 at_cipsend:
-        .byte "AT+CIPSEND=64", 13, 0
+        .byte $41,$54,$2b,$43,$49,$50,$53,$45,$4e,$44,$3d,$36,$34,13,0
 
 ; -----------------------------------------------------------------------------
 ; Receive into 64-byte buffer
@@ -384,9 +403,9 @@ net_recv:
 nr_find_r:
         jsr serial_recv
         bcs nr_none
-        cmp #'R'
+        cmp #$52                 ; ASCII 'R'
         bne nr_find_r
-        lda #'R'
+        lda #$52                 ; ASCII 'R'
         sta rx_buffer
         ldx #1
 
@@ -430,7 +449,7 @@ nr_none:
         rts
 
 rubp_magic:
-        .byte "RACH"
+        .byte $52,$41,$43,$48
 
 ; Wait for the ESP-AT CIPSEND prompt.
 wait_send_prompt:
@@ -443,7 +462,7 @@ wsp_loop:
         sec
         rts
 wsp_byte:
-        cmp #'>'
+        cmp #$3e                 ; ASCII '>'
         beq wsp_ready
         iny
         bne wsp_loop
@@ -465,7 +484,7 @@ net_close:
         rts
 
 at_cipclose:
-        .byte "AT+CIPCLOSE", 13, 0
+        .byte $41,$54,$2b,$43,$49,$50,$43,$4c,$4f,$53,$45,13,0
 
 ; Status
 net_status:     .byte 0

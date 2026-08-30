@@ -26,6 +26,7 @@ def constants() -> dict[str, int]:
 def test_wire_constants() -> None:
     actual = constants()
     expected = {
+        "MAGIC_0": 0x52, "MAGIC_1": 0x41, "MAGIC_2": 0x43, "MAGIC_3": 0x48,
         "MSG_HELLO": 1, "MSG_WELCOME": 2, "MSG_GAME_START": 3,
         "MSG_PLAY_CARDS": 4, "MSG_DRAW_CARD": 5, "MSG_CARD_DRAWN": 6,
         "MSG_GAME_STATE": 7, "MSG_TURN_START": 8, "MSG_TURN_END": 9,
@@ -53,6 +54,48 @@ def test_real_vic20_user_port_pins() -> None:
     assert "ora #$c0" in source
     assert "ora #$e0" in source
     assert "bit_delay:\n        ldy #14" in source
+    assert "half_bit_delay:\n        ldy #8" in source
+
+
+def test_keyboard_irqs_and_serial_critical_sections() -> None:
+    main = (ROOT / "src/main.asm").read_text()
+    serial = (ROOT / "src/net/wifi.asm").read_text()
+    assert "jsr display_title\n\n        ; GETIN" in main
+    assert "; for the duration of each timing-critical 8N1 transfer.\n        cli" in main
+    assert "serial_send:\n        php\n        sei" in serial
+    assert "serial_recv:\n        php\n        sei" in serial
+    assert serial.count("        plp") >= 3
+    input_source = (ROOT / "src/input.asm").read_text()
+    connect = (ROOT / "src/connect.asm").read_text()
+    assert "jsr wait_key\n        tax\n        pla\n        tay\n        txa" in input_source
+    assert "sta ip_buffer,y" in input_source
+    assert "parse_ip:\n        php\n        sei" in connect
+
+
+def test_wire_literals_are_ascii_not_vic_petscii() -> None:
+    source = (ROOT / "src/net/wifi.asm").read_text()
+    rubp = (ROOT / "src/rubp.asm").read_text()
+    assert '.byte "AT+' not in source
+    assert '.byte "RACH"' not in source
+    assert '.byte "VIC-20"' not in rubp
+
+    data = (ROOT / "build/rachel.prg").read_bytes()
+    assert bytes.fromhex("41 54 2b 43 49 50 53 54 41 52 54 3d") in data
+    assert bytes.fromhex("41 54 2b 43 49 50 53 45 4e 44 3d 36 34 0d") in data
+    assert b"RACH" in data
+    assert b"VIC-20\x00" in data
+
+
+def test_connect_response_does_not_reject_the_e_in_connect() -> None:
+    source = (ROOT / "src/net/wifi.asm").read_text()
+    wait = source[source.index("wait_response:"):source.index("timeout_lo:")]
+    assert "cmp #$4f" in wait
+    assert "wr_maybe_err" not in wait
+    assert "standalone 'E'" in wait
+    assert "bcs wr_wait_k_timeout" in wait
+    assert "bcc wr_maybe_ok" in wait
+    assert "cmp #$4e" in wait
+    assert "wr_success:" in wait
 
 
 def test_screen_clear_terminates_and_text_uses_screen_codes() -> None:
@@ -109,6 +152,9 @@ if __name__ == "__main__":
     test_wire_constants()
     test_prg_run_trampoline()
     test_real_vic20_user_port_pins()
+    test_keyboard_irqs_and_serial_critical_sections()
+    test_wire_literals_are_ascii_not_vic_petscii()
+    test_connect_response_does_not_reject_the_e_in_connect()
     test_screen_clear_terminates_and_text_uses_screen_codes()
     test_recovery_and_action_metadata_are_wired()
     test_canonical_fixture_when_supplied_by_ci()

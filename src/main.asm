@@ -31,6 +31,11 @@ basic_end:
         jsr rubp_init
         jsr display_title
 
+        ; GETIN is fed by the KERNAL IRQ keyboard scanner. Keep interrupts
+        ; enabled during UI/gameplay; the serial byte routines mask them only
+        ; for the duration of each timing-critical 8N1 transfer.
+        cli
+
         ; Wait for keypress
         jsr wait_key
 

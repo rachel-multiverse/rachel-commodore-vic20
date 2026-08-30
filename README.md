@@ -75,8 +75,11 @@ layout, canonical fixture shape, recovery metadata and action encoding on every
 change.
 
 Emu198x accepts the PRG, selects the 8KB expansion, executes the BASIC `SYS`
-trampoline and renders the Rachel title screen. End-to-end network validation
-still needs faithful PB0/CB2 user-port peripheral support, tracked in
+trampoline and renders the Rachel title screen. Its cycle-driven PB0/CB2
+ESP-AT bridge has also connected this client to the real Go server: the server
+accepted HELLO, assigned a seat, added an AI opponent, and emitted WELCOME,
+GAME_START, GAME_STATE, TURN_START, and HAND_SYNC. Rendering and playing that
+inbound burst end-to-end remains the next validation step, tracked in
 [emu198x/emu198x#1305](https://github.com/emu198x/emu198x/issues/1305).
 
 ## Screen Layout

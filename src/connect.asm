@@ -26,13 +26,8 @@ input_ip_address:
         lda #4
         sta ZP_CURSOR_Y
 
-        ; Get input
-        lda #<ip_buffer
-        sta ZP_PTR1
-        lda #>ip_buffer
-        sta ZP_PTR1+1
-        lda #20
-        sta ZP_TEMP3            ; Max length
+        ; Get input. input_line uses ip_buffer directly so KERNAL keyboard
+        ; scanning cannot invalidate a zero-page pointer between keystrokes.
         jsr input_line
 
         rts
@@ -76,10 +71,8 @@ connect_msg:
 ; Simple parser for xxx.xxx.xxx.xxx format
 ; -----------------------------------------------------------------------------
 parse_ip:
-        lda #<ip_buffer
-        sta ZP_PTR1
-        lda #>ip_buffer
-        sta ZP_PTR1+1
+        php
+        sei
 
         ldx #0                  ; Octet index
         ldy #0                  ; Buffer index
@@ -89,7 +82,7 @@ pi_octet:
         sta ZP_TEMP1            ; Current value
 
 pi_digit:
-        lda (ZP_PTR1),y
+        lda ip_buffer,y
         beq pi_store            ; End of string
         cmp #'.'
         beq pi_store            ; Octet separator
@@ -124,6 +117,7 @@ pi_store:
         jmp pi_octet
 
 pi_done:
+        plp
         rts
 
 ; IP address storage

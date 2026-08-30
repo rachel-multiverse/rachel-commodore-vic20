@@ -124,7 +124,8 @@ sh_name_done:
         rts
 
 player_name:
-        .byte "VIC-20", 0
+        ; RUBP strings are UTF-8/ASCII, not VIC PETSCII.
+        .byte $56,$49,$43,$2d,$32,$30,0
         .res 9, 0               ; Pad to 16 bytes
 
 ; -----------------------------------------------------------------------------
