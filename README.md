@@ -90,6 +90,12 @@ GitHub Actions also compiles a test-only one-card autoplay PRG. Production PRGs
 contain no autoplay code. A complete emulator/server run remains a local test
 because VIC-20 ROM images cannot be redistributed to hosted runners.
 
+To run that complete deterministic game, build Emu198x's release VIC-20 runner,
+set `EMU198X_DIR` to its checkout, and run `make e2e-full-game`. The adjacent
+Go server checkout is used by default; override it with `RACHEL_SERVER_DIR`.
+Logs and the final screenshot are retained under `build/e2e-output/`. The test
+requires the server to finish and rejects any run containing a client error.
+
 The checksum lets the VIC-20 safely retain the server's authoritative state hash
 and include it with play, draw and recovery requests. The server can therefore
 reject actions based on stale state instead of relying on syntax alone.
