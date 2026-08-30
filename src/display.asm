@@ -12,6 +12,16 @@ display_init:
         sta VIC_BKGND
         lda #$00                ; Aux color
         sta VIC_AUX
+        ; Direct screen writes do not pass through KERNAL, so initialise the
+        ; matching colour RAM explicitly instead of inheriting arbitrary
+        ; editor colours. Colour 1 is white.
+        ldy #0
+        lda #$01
+di_color:
+        sta COLOR_BASE,y
+        sta COLOR_BASE+$100,y
+        iny
+        bne di_color
         jsr display_clear
         rts
 
@@ -96,7 +106,6 @@ print_char:
 
         ; Calculate screen address
         lda ZP_CURSOR_Y
-        asl                     ; Y * 2
         tax
         lda screen_lo,x
         sta ZP_PTR2

@@ -54,7 +54,8 @@ def test_real_vic20_user_port_pins() -> None:
     assert "ora #$c0" in source
     assert "ora #$e0" in source
     assert "bit_delay:\n        ldy #14" in source
-    assert "half_bit_delay:\n        ldy #8" in source
+    assert "rx_bit_delay:\n        ldy #16" in source
+    assert "rx_half_bit_delay:\n        ldy #7" in source
 
 
 def test_keyboard_irqs_and_serial_critical_sections() -> None:
@@ -64,6 +65,8 @@ def test_keyboard_irqs_and_serial_critical_sections() -> None:
     assert "; for the duration of each timing-critical 8N1 transfer.\n        cli" in main
     assert "serial_send:\n        php\n        sei" in serial
     assert "serial_recv:\n        php\n        sei" in serial
+    assert "rx_bit_delay:\n        ldy #16" in serial
+    assert "rx_half_bit_delay:\n        ldy #7" in serial
     assert serial.count("        plp") >= 3
     input_source = (ROOT / "src/input.asm").read_text()
     connect = (ROOT / "src/connect.asm").read_text()
@@ -86,15 +89,15 @@ def test_wire_literals_are_ascii_not_vic_petscii() -> None:
     assert b"VIC-20\x00" in data
 
 
-def test_connect_response_does_not_reject_the_e_in_connect() -> None:
+def test_connect_response_uses_unambiguous_stream_terminator() -> None:
     source = (ROOT / "src/net/wifi.asm").read_text()
     wait = source[source.index("wait_response:"):source.index("timeout_lo:")]
-    assert "cmp #$4f" in wait
-    assert "wr_maybe_err" not in wait
-    assert "standalone 'E'" in wait
-    assert "bcs wr_wait_k_timeout" in wait
-    assert "bcc wr_maybe_ok" in wait
+    assert "cmp #$4b" in wait
     assert "cmp #$4e" in wait
+    assert "cmp #$4f" not in wait
+    assert "wr_maybe_err" not in wait
+    assert "accepting either independently" in wait
+    assert "wr_wait_k_timeout" not in wait
     assert "wr_success:" in wait
 
 
@@ -105,6 +108,10 @@ def test_screen_clear_terminates_and_text_uses_screen_codes() -> None:
     assert "sta SCREEN_BASE+$100,y" in clear
     assert "ldx ZP_PTR1+1" not in clear
     assert "and #$1f" in source
+    assert "sta COLOR_BASE,y" in source
+    assert "sta COLOR_BASE+$100,y" in source
+    calculate = source[source.index("; Calculate screen address"):source.index("; Add X offset")]
+    assert "asl" not in calculate
     assert "PA7 as output" not in source
 
 
@@ -130,6 +137,13 @@ def test_recovery_and_action_metadata_are_wired() -> None:
     assert "rx_buffer+PAYLOAD_START+33,x" in protocol
     assert "rx_buffer+PAYLOAD_START+40,x" in protocol
     assert "jsr send_sync_request" in main
+    assert "cmp #MSG_PLAYER_LIST" in main
+    assert "jsr process_player_list_welcome" in main
+    assert "process_player_list_welcome:" in protocol
+    assert "cmp #MSG_HAND_SYNC" in main
+    assert "wfg_sync:" in main
+    assert "cmp #$40" in main
+    assert "jsr send_sync_request\n        jmp wfg_loop" in main
 
     # The wire format permits at most four cards in one play action.
     assert "cmp #4" in input_source
@@ -154,7 +168,7 @@ if __name__ == "__main__":
     test_real_vic20_user_port_pins()
     test_keyboard_irqs_and_serial_critical_sections()
     test_wire_literals_are_ascii_not_vic_petscii()
-    test_connect_response_does_not_reject_the_e_in_connect()
+    test_connect_response_uses_unambiguous_stream_terminator()
     test_screen_clear_terminates_and_text_uses_screen_codes()
     test_recovery_and_action_metadata_are_wired()
     test_canonical_fixture_when_supplied_by_ci()

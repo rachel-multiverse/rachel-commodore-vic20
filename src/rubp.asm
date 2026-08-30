@@ -373,6 +373,23 @@ process_welcome:
         sta player_count
         rts
 
+; PLAYER_LIST is the repeatable lobby snapshot sent after WELCOME. Its header
+; is recipient-specific, so it can restore the same identity fields if the
+; initial WELCOME was lost at the serial/modem boundary.
+process_player_list_welcome:
+        lda rx_buffer+HDR_PLAYER_ID
+        sta player_id_hi
+        lda rx_buffer+HDR_PLAYER_ID+1
+        sta player_id_lo
+        sta my_index
+        lda rx_buffer+HDR_GAME_ID
+        sta game_id_hi
+        lda rx_buffer+HDR_GAME_ID+1
+        sta game_id_lo
+        lda rx_buffer+PAYLOAD_START
+        sta player_count
+        rts
+
 ; GAME_START replaces the private hand with the initial deal.
 process_game_start:
         lda rx_buffer+PAYLOAD_START

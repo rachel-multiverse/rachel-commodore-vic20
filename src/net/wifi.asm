@@ -179,33 +179,16 @@ wr_loop:
         jsr serial_recv
         bcs wr_check_timeout
 
-        ; Got a byte - scan for the complete "OK" token. Do not treat a
-        ; standalone 'E' as ERROR: successful ESP replies include CONNECT.
-        cmp #$4f                 ; ASCII 'O'
-        beq wr_maybe_ok
-        jmp wr_loop
-
-wr_maybe_ok:
-        jsr serial_recv
-        bcs wr_wait_k_timeout
+        ; Scan the response as a stream. K terminates OK and N occurs in the
+        ; successful CONNECT status; accepting either independently avoids
+        ; requiring adjacent software-UART reads to preserve their prefixes.
+        ; Neither marker occurs in ERROR.
         cmp #$4b                 ; ASCII 'K'
         beq wr_success
-        cmp #$4e                 ; ASCII 'N' completes CONNECT's "ON"
+        cmp #$4e                 ; ASCII 'N'
         bne wr_loop
 wr_success:
         clc
-        rts
-
-wr_wait_k_timeout:
-        ; serial_recv is deliberately non-blocking. Preserve the fact that an
-        ; 'O' was seen while waiting for the following byte to begin.
-        inc timeout_lo
-        bne wr_maybe_ok
-        inc timeout_hi
-        lda timeout_hi
-        cmp #$10
-        bcc wr_maybe_ok
-        sec
         rts
 
 wr_check_timeout:
@@ -282,7 +265,7 @@ serial_recv:
         bne sr_none
 
         ; Wait half bit time to sample in middle
-        jsr half_bit_delay
+        jsr rx_half_bit_delay
 
         ; Read 8 data bits
         lda #0
@@ -290,7 +273,7 @@ serial_recv:
         ldx #8
 
 sr_bit:
-        jsr bit_delay
+        jsr rx_bit_delay
         lda VIA1_PORTB
         and #$01
         beq sr_zero
@@ -303,8 +286,9 @@ sr_shift:
         dex
         bne sr_bit
 
-        ; Wait for stop bit
-        jsr bit_delay
+        ; Return during the stop bit. The caller immediately resumes polling,
+        ; which lets it observe the next falling edge instead of re-entering
+        ; halfway through the next byte on a continuous 8N1 stream.
 
         lda ZP_TEMP4
         sta ZP_TEMP3
@@ -336,11 +320,22 @@ bd_loop:
         bne bd_loop
         rts
 
-half_bit_delay:
-        ldy #8
-hbd_loop:
+; Receive has less work between samples than transmit has between transitions,
+; so it needs its own calibrated delays. These values put successive samples
+; approximately 114-118 cycles apart and the first data sample near 1.5 bit
+; cells once the VIA read and sampling-loop instructions are included.
+rx_bit_delay:
+        ldy #16
+rbd_loop:
         dey
-        bne hbd_loop
+        bne rbd_loop
+        rts
+
+rx_half_bit_delay:
+        ldy #7
+rhbd_loop:
+        dey
+        bne rhbd_loop
         rts
 
 ; CB2 manual output modes occupy PCR bits 7..5: 110=low, 111=high.

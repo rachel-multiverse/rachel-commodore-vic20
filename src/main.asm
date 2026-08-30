@@ -258,7 +258,15 @@ wfw_loop:
         bcs wfw_loop
         lda rx_buffer+HDR_TYPE
         cmp #MSG_WELCOME
+        beq wfw_welcome
+        ; PLAYER_LIST is sent after WELCOME and carries enough authoritative
+        ; header state to recover if the one-shot WELCOME frame was lost while
+        ; the modem transitioned out of CIPSEND mode.
+        cmp #MSG_PLAYER_LIST
         bne wfw_loop
+        jsr process_player_list_welcome
+        rts
+wfw_welcome:
         jsr process_welcome
         rts
 .endproc
@@ -267,6 +275,9 @@ wfw_loop:
 ; Wait for game to start
 ; -----------------------------------------------------------------------------
 .proc wait_for_game
+        lda #0
+        sta wait_game_lo
+        sta wait_game_hi
         jsr display_clear
         lda #0
         sta ZP_CURSOR_X
@@ -280,7 +291,24 @@ wfw_loop:
 
 wfg_loop:
         jsr net_recv
-        bcs wfg_loop
+        bcc wfg_message
+        inc wait_game_lo
+        bne wfg_loop
+        inc wait_game_hi
+        lda wait_game_hi
+        cmp #$40
+        bcc wfg_loop
+        ; Pull a quiet authoritative snapshot if the initial unsolicited burst
+        ; crossed a software-UART boundary badly enough to lose GAME_STATE.
+        lda #0
+        sta wait_game_lo
+        sta wait_game_hi
+        jsr send_sync_request
+        jmp wfg_loop
+wfg_message:
+        lda #0
+        sta wait_game_lo
+        sta wait_game_hi
 
         jsr rubp_validate
         bcs wfg_loop
@@ -288,6 +316,8 @@ wfg_loop:
         lda rx_buffer+HDR_TYPE
         cmp #MSG_GAME_START
         beq wfg_start
+        cmp #MSG_HAND_SYNC
+        beq wfg_sync
         cmp #MSG_GAME_STATE
         bne wfg_loop
 
@@ -296,6 +326,9 @@ wfg_loop:
 wfg_start:
         jsr process_game_start
         ; A public GAME_STATE follows and supplies turn/table state.
+        jmp wfg_loop
+wfg_sync:
+        jsr process_hand_sync
         jmp wfg_loop
 .endproc
 
@@ -308,6 +341,10 @@ msg_conn_fail:
         .byte "CONNECTION FAILED", 0
 msg_game_over:
         .byte "GAME OVER!", 0
+wait_game_lo:
+        .byte 0
+wait_game_hi:
+        .byte 0
 
 ; -----------------------------------------------------------------------------
 ; Include modules
