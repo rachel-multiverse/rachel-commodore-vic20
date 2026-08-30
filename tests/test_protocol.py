@@ -135,7 +135,8 @@ def test_recovery_and_action_metadata_are_wired() -> None:
     # Recovery metadata is not discarded and ERROR requests a fresh pair.
     assert "process_hand_sync:" in protocol
     assert "rx_buffer+PAYLOAD_START+33,x" in protocol
-    assert "rx_buffer+PAYLOAD_START+40,x" in protocol
+    assert "Do not claim hash validation" in protocol
+    assert protocol.count("sta state_hash_present") >= 3
     assert "jsr send_sync_request" in main
     assert "cmp #MSG_PLAYER_LIST" in main
     assert "jsr process_player_list_welcome" in main

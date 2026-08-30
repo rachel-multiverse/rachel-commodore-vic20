@@ -343,17 +343,11 @@ pgs_turn:
         inx
         cpx #4
         bne pgs_turn
-        lda rx_buffer+PAYLOAD_START+23
-        and #1
+        ; RUBP hashes are optional. This bit-banged client has no frame CRC,
+        ; so a syntactically valid frame cannot prove that all eight hash bytes
+        ; arrived intact. Do not claim hash validation on outbound actions.
+        lda #0
         sta state_hash_present
-        beq pgs_done
-        ldx #0
-pgs_hash:
-        lda rx_buffer+PAYLOAD_START+24,x
-        sta state_hash,x
-        inx
-        cpx #8
-        bne pgs_hash
 pgs_done:
 
         rts
@@ -439,17 +433,10 @@ phs_turn:
         inx
         cpx #4
         bne phs_turn
-        lda rx_buffer+PAYLOAD_START+39
-        and #1
+        ; See process_game_state: omit the optional observed hash when the
+        ; transport cannot establish whole-frame integrity.
+        lda #0
         sta state_hash_present
-        beq phs_done
-        ldx #0
-phs_hash:
-        lda rx_buffer+PAYLOAD_START+40,x
-        sta state_hash,x
-        inx
-        cpx #8
-        bne phs_hash
 phs_done:
         rts
 

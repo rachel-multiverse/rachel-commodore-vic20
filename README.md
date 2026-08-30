@@ -74,13 +74,19 @@ GitHub Actions builds the PRG and verifies its BASIC `RUN` trampoline, memory
 layout, canonical fixture shape, recovery metadata and action encoding on every
 change.
 
-Emu198x accepts the PRG, selects the 8KB expansion, executes the BASIC `SYS`
-trampoline and renders the Rachel title screen. Its cycle-driven PB0/CB2
-ESP-AT bridge has also connected this client to the real Go server: the server
-accepted HELLO, assigned a seat, added an AI opponent, and emitted WELCOME,
-GAME_START, GAME_STATE, TURN_START, and HAND_SYNC. Rendering and playing that
-inbound burst end-to-end remains the next validation step, tracked in
-[emu198x/emu198x#1305](https://github.com/emu198x/emu198x/issues/1305).
+Emu198x accepts the PRG, selects the 8KB expansion and executes the BASIC `SYS`
+trampoline. Its cycle-driven PB0/CB2 ESP-AT bridge has completed an end-to-end
+game turn against the real Go server: HELLO/lobby admission, initial deal,
+authoritative state recovery, keyboard `D`, accepted DRAW_CARD, CARD_DRAWN,
+turn advancement, and rendering the resulting eight-card hand. The reproducible
+input sequence is in `tests/emu198x_draw_e2e.json`; run the Go server locally
+with one AI opponent and pass that script to Emu198x's VIC-20 runner.
+
+The VIC-20 deliberately omits the optional observed-state hash from actions.
+RUBP frames have no checksum and this software UART therefore cannot establish
+that every byte of an eight-byte hash is intact. The server still validates the
+action against the authoritative game rules and follows it with fresh public
+and private state.
 
 ## Screen Layout
 
