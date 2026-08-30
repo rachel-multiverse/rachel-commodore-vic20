@@ -19,26 +19,13 @@ display_init:
 ; Clear screen
 ; -----------------------------------------------------------------------------
 display_clear:
-        lda #<SCREEN_BASE
-        sta ZP_PTR1
-        lda #>SCREEN_BASE
-        sta ZP_PTR1+1
-
-        ldx #0
         ldy #0
         lda #' '                ; Space character
 dc_loop:
-        sta (ZP_PTR1),y
+        sta SCREEN_BASE,y
+        sta SCREEN_BASE+$100,y
         iny
-        bne dc_next
-        inc ZP_PTR1+1
-dc_next:
-        inx
-        cpx #$00                ; 256 characters
         bne dc_loop
-        ldx ZP_PTR1+1
-        cpx #>SCREEN_BASE+2     ; 512 bytes = 2 pages
-        bcc dc_loop
 
         ; Reset cursor
         lda #0
@@ -124,6 +111,14 @@ print_char:
         pla
         tax
         pla
+        ; Direct screen RAM uses VIC screen codes, not PETSCII. Uppercase
+        ; letters occupy $01-$1A rather than PETSCII $41-$5A.
+        cmp #'A'
+        bcc pc_store
+        cmp #'Z'+1
+        bcs pc_store
+        and #$1f
+pc_store:
         ldy ZP_PTR3
         sta (ZP_PTR2),y
         ldy ZP_PTR3+1

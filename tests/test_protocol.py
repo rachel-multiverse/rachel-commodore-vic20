@@ -53,6 +53,15 @@ def test_real_vic20_user_port_pins() -> None:
     assert "ora #$c0" in source
     assert "ora #$e0" in source
     assert "bit_delay:\n        ldy #14" in source
+
+
+def test_screen_clear_terminates_and_text_uses_screen_codes() -> None:
+    source = (ROOT / "src/display.asm").read_text()
+    clear = source[source.index("display_clear:"):source.index("display_title:")]
+    assert "sta SCREEN_BASE,y" in clear
+    assert "sta SCREEN_BASE+$100,y" in clear
+    assert "ldx ZP_PTR1+1" not in clear
+    assert "and #$1f" in source
     assert "PA7 as output" not in source
 
 
@@ -100,6 +109,7 @@ if __name__ == "__main__":
     test_wire_constants()
     test_prg_run_trampoline()
     test_real_vic20_user_port_pins()
+    test_screen_clear_terminates_and_text_uses_screen_codes()
     test_recovery_and_action_metadata_are_wired()
     test_canonical_fixture_when_supplied_by_ci()
     print("VIC-20 RUBP/PRG conformance checks passed")

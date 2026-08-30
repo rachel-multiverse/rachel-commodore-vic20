@@ -74,12 +74,10 @@ GitHub Actions builds the PRG and verifies its BASIC `RUN` trampoline, memory
 layout, canonical fixture shape, recovery metadata and action encoding on every
 change.
 
-VICE 3.10 recognises and injects the generated PRG with an 8KB expansion, but a
-bounded automated run still remains visibly at the BASIC prompt. Emu198x also
-accepts the PRG and selects the expansion, but its queued `RUN` has the same
-observable result. Executable validation is therefore still pending; the
-Emu198x path is tracked in
-[emu198x/emu198x#1304](https://github.com/emu198x/emu198x/issues/1304).
+Emu198x accepts the PRG, selects the 8KB expansion, executes the BASIC `SYS`
+trampoline and renders the Rachel title screen. End-to-end network validation
+still needs faithful PB0/CB2 user-port peripheral support, tracked in
+[emu198x/emu198x#1305](https://github.com/emu198x/emu198x/issues/1305).
 
 ## Screen Layout
 
