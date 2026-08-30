@@ -66,7 +66,9 @@ main_loop:
 
         jsr process_game_state
         jsr render_game
-        jmp ml_input
+        lda game_over_flag
+        beq ml_input
+        jmp game_over
 
 ml_check_drawn:
         cmp #MSG_CARD_DRAWN
@@ -77,10 +79,23 @@ ml_check_drawn:
 
 ml_check_sync:
         cmp #MSG_HAND_SYNC
-        bne ml_check_end
-        jsr process_game_start
+        bne ml_check_turn
+        jsr process_hand_sync
         jsr render_hand
         jmp ml_input
+
+ml_check_turn:
+        cmp #MSG_TURN_START
+        bne ml_check_error
+        jsr process_turn_start
+        jsr render_game
+        jmp ml_input
+
+ml_check_error:
+        cmp #MSG_ERROR
+        bne ml_check_end
+        jsr send_sync_request
+        jmp main_loop
 
 ml_check_end:
         cmp #MSG_PLAYER_WON
@@ -106,6 +121,10 @@ ml_not_quit:
         beq ml_right
         cmp #KEY_SPACE
         beq ml_select
+        cmp #KEY_UP
+        beq ml_suit_next
+        cmp #KEY_DOWN
+        beq ml_suit_prev
         cmp #KEY_RETURN
         beq ml_play
         cmp #'D'
@@ -129,12 +148,36 @@ ml_select:
         jsr render_hand
         jmp main_loop
 
+ml_suit_next:
+        lda chosen_suit
+        clc
+        adc #1
+        and #3
+        sta chosen_suit
+        jsr render_hand
+        jmp main_loop
+
+ml_suit_prev:
+        lda chosen_suit
+        sec
+        sbc #1
+        and #3
+        sta chosen_suit
+        jsr render_hand
+        jmp main_loop
+
 ml_play:
         jsr count_selected
         bne ml_play_selected
         jmp main_loop           ; Nothing selected
 ml_play_selected:
-        lda #$FF                ; No suit nomination
+        jsr selected_has_ace
+        bcc ml_no_nomination
+        lda chosen_suit
+        bcs ml_send_play
+ml_no_nomination:
+        lda #$FF
+ml_send_play:
         jsr send_play_cards
         jmp main_loop
 
@@ -174,6 +217,29 @@ quit_game:
         cli
         rts
 
+.endproc
+
+; Returns carry set if any selected card is an ace.
+.proc selected_has_ace
+        ldx #0
+sha_loop:
+        cpx hand_count
+        bcs sha_none
+        lda selected_cards,x
+        beq sha_next
+        lda my_hand,x
+        and #$0f
+        cmp #RANK_ACE
+        beq sha_yes
+sha_next:
+        inx
+        bne sha_loop
+sha_none:
+        clc
+        rts
+sha_yes:
+        sec
+        rts
 .endproc
 
 ; -----------------------------------------------------------------------------

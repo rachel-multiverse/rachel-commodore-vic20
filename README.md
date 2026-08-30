@@ -5,6 +5,7 @@ A VIC-20 client for the Rachel card game, written in 6502 assembly.
 ## Requirements
 
 - **Hardware**: VIC-20 with 8KB+ memory expansion
+- **Video standard**: PAL (the current 9600-baud loop is cycle-tuned for PAL)
 - **Networking**: ESP8266/ESP32 WiFi modem connected to user port
 - **Assembler**: cc65 toolchain (ca65, ld65)
 
@@ -34,6 +35,7 @@ Then type `RUN` to start.
 |-----|--------|
 | ← → | Move cursor |
 | SPACE | Select/deselect card |
+| ↑ ↓ | Choose suit for an ace |
 | RETURN | Play selected cards |
 | D | Draw card |
 | RUN/STOP | Quit game |
@@ -51,8 +53,8 @@ The WiFi modem connects to the VIC-20 user port:
 - User-port pin C / VIA PB0: RX (input)
 - GND: Ground
 
-Uses ESP-AT commands for ESP8266/ESP32 modems. The client waits for the
-This pin mapping targets the real Sven Petersen C64 WiFi modem with the
+Uses ESP-AT commands for ESP8266/ESP32 modems. This pin mapping targets the
+real Sven Petersen C64 WiFi modem with the
 documented VIC-20 edge adapter. The driver waits for the ESP-AT `CIPSEND`
 prompt before transmitting and strips `+IPD`/status text by
 synchronising received data on the RUBP `RACH` magic.
@@ -69,7 +71,15 @@ public `GAME_STATE` flows. Action messages carry RachelSpec v1 metadata.
 Full specification: [rachel-multiverse/protocol](https://github.com/rachel-multiverse/protocol).
 
 GitHub Actions builds the PRG and verifies its BASIC `RUN` trampoline, memory
-layout and protocol constants on every change.
+layout, canonical fixture shape, recovery metadata and action encoding on every
+change.
+
+VICE 3.10 recognises and injects the generated PRG with an 8KB expansion, but a
+bounded automated run still remains visibly at the BASIC prompt. Emu198x also
+accepts the PRG and selects the expansion, but its queued `RUN` has the same
+observable result. Executable validation is therefore still pending; the
+Emu198x path is tracked in
+[emu198x/emu198x#1304](https://github.com/emu198x/emu198x/issues/1304).
 
 ## Screen Layout
 

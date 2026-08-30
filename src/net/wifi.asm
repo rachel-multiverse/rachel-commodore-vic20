@@ -307,9 +307,11 @@ sr_none:
         sec
         rts
 
-; Bit timing delays for ~9600 baud at 1MHz
+; PAL VIC-20 timing for approximately 9600 baud. Counting the surrounding
+; transmit loop as well as this delay gives about 114-115 CPU cycles between
+; output transitions at the PAL machine's ~1.1 MHz CPU clock.
 bit_delay:
-        ldy #16
+        ldy #14
 bd_loop:
         dey
         bne bd_loop

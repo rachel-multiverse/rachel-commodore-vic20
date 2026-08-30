@@ -9,10 +9,18 @@ rubp_init:
         lda #0
         sta sequence_lo
         sta sequence_hi
-        sta player_id_lo
-        sta player_id_hi
         sta game_id_lo
         sta game_id_hi
+        sta turn_number
+        sta turn_number+1
+        sta turn_number+2
+        sta turn_number+3
+        sta state_hash_present
+        sta game_over_flag
+        sta chosen_suit
+        lda #$ff
+        sta player_id_lo
+        sta player_id_hi
         rts
 
 ; -----------------------------------------------------------------------------
@@ -141,6 +149,18 @@ send_play_cards:
         lda #RACHEL_SPEC_VER
         sta tx_buffer+PAYLOAD_START+35
 
+        lda state_hash_present
+        sta tx_buffer+PAYLOAD_START+36
+        beq spc_no_hash
+        ldx #0
+spc_hash:
+        lda state_hash,x
+        sta tx_buffer+PAYLOAD_START+37,x
+        inx
+        cpx #8
+        bne spc_hash
+spc_no_hash:
+
         ; Copy selected cards to payload
         ldx #0
         ldy #1                  ; Cards occupy payload bytes 1-32
@@ -206,6 +226,47 @@ send_draw:
         lda #RACHEL_SPEC_VER
         sta tx_buffer+PAYLOAD_START+3
 
+        lda state_hash_present
+        sta tx_buffer+PAYLOAD_START+4
+        beq sd_no_hash
+        ldx #0
+sd_hash:
+        lda state_hash,x
+        sta tx_buffer+PAYLOAD_START+5,x
+        inx
+        cpx #8
+        bne sd_hash
+sd_no_hash:
+
+        jsr net_send
+        rts
+
+; Ask the host for a paired public/private authoritative snapshot.
+send_sync_request:
+        lda #MSG_SYNC_REQUEST
+        jsr build_header
+        ldx #0
+ssr_turn:
+        lda turn_number,x
+        sta tx_buffer+PAYLOAD_START,x
+        inx
+        cpx #4
+        bne ssr_turn
+        lda #0
+        sta tx_buffer+PAYLOAD_START+4
+        lda #RACHEL_SPEC_VER
+        sta tx_buffer+PAYLOAD_START+5
+        lda state_hash_present
+        sta tx_buffer+PAYLOAD_START+6
+        beq ssr_no_hash
+        ldx #0
+ssr_hash:
+        lda state_hash,x
+        sta tx_buffer+PAYLOAD_START+7,x
+        inx
+        cpx #8
+        bne ssr_hash
+ssr_no_hash:
         jsr net_send
         rts
 
@@ -272,6 +333,28 @@ pgs_counts:
         cpx #8
         bne pgs_counts
 
+        lda rx_buffer+PAYLOAD_START+15
+        sta game_over_flag
+        ldx #0
+pgs_turn:
+        lda rx_buffer+PAYLOAD_START+17,x
+        sta turn_number,x
+        inx
+        cpx #4
+        bne pgs_turn
+        lda rx_buffer+PAYLOAD_START+23
+        and #1
+        sta state_hash_present
+        beq pgs_done
+        ldx #0
+pgs_hash:
+        lda rx_buffer+PAYLOAD_START+24,x
+        sta state_hash,x
+        inx
+        cpx #8
+        bne pgs_hash
+pgs_done:
+
         rts
 
 ; WELCOME assigns the seat and game. Player IDs are canonical seat indices.
@@ -328,6 +411,35 @@ pcd_loop:
 pcd_done:
         rts
 
+; HAND_SYNC replaces the hand and carries authoritative recovery metadata.
+process_hand_sync:
+        jsr process_game_start
+        ldx #0
+phs_turn:
+        lda rx_buffer+PAYLOAD_START+33,x
+        sta turn_number,x
+        inx
+        cpx #4
+        bne phs_turn
+        lda rx_buffer+PAYLOAD_START+39
+        and #1
+        sta state_hash_present
+        beq phs_done
+        ldx #0
+phs_hash:
+        lda rx_buffer+PAYLOAD_START+40,x
+        sta state_hash,x
+        inx
+        cpx #8
+        bne phs_hash
+phs_done:
+        rts
+
+process_turn_start:
+        lda rx_buffer+PAYLOAD_START
+        sta current_turn
+        rts
+
 ; -----------------------------------------------------------------------------
 ; Data
 ; -----------------------------------------------------------------------------
@@ -338,6 +450,7 @@ player_id_hi:   .byte 0
 game_id_lo:     .byte 0
 game_id_hi:     .byte 0
 nominated_suit: .byte $FF
+chosen_suit:     .byte 0
 
 ; Game state
 current_turn:       .byte 0
@@ -351,6 +464,10 @@ my_index:           .byte 0
 player_count:       .byte 0
 player_counts:      .res 8, 0
 my_hand:            .res 32, 0
+turn_number:        .res 4, 0
+state_hash:         .res 8, 0
+state_hash_present: .byte 0
+game_over_flag:     .byte 0
 
 ; Buffers
 tx_buffer:      .res 64, 0

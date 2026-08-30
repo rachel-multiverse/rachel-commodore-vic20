@@ -91,6 +91,16 @@ rh_digits:
         lda #':'
         jsr print_char
 
+        lda #' '
+        jsr print_char
+        lda #'S'
+        jsr print_char
+        lda #'='
+        jsr print_char
+        ldx chosen_suit
+        lda suit_chars,x
+        jsr print_char
+
         ; Next line for cards
         lda #0
         sta ZP_CURSOR_X

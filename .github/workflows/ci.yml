@@ -11,11 +11,17 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: rachel-multiverse/protocol
+          path: canonical-protocol
       - name: Install cc65
         run: sudo apt-get update && sudo apt-get install --yes cc65
       - name: Build PRG and run conformance checks
         run: make test
+        env:
+          RUBP_FIXTURE: canonical-protocol/specs/fixtures/rubp-messages-v1.json
       - uses: actions/upload-artifact@v4
         with:
           name: rachel-vic20-prg

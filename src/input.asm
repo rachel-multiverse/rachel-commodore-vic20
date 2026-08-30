@@ -93,9 +93,17 @@ cr_done:
 ; -----------------------------------------------------------------------------
 toggle_select:
         ldx cursor_pos
+        lda selected_cards,x
+        bne ts_toggle
+        jsr count_selected
+        cmp #4
+        bcs ts_done
+ts_toggle:
+        ldx cursor_pos
         lda #1
         eor selected_cards,x
         sta selected_cards,x
+ts_done:
         rts
 
 ; -----------------------------------------------------------------------------

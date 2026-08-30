@@ -2,6 +2,8 @@
 """Dependency-free RUBP and PRG-format regression checks."""
 
 from pathlib import Path
+import json
+import os
 import re
 import struct
 
@@ -50,11 +52,54 @@ def test_real_vic20_user_port_pins() -> None:
     assert "and #$01" in source
     assert "ora #$c0" in source
     assert "ora #$e0" in source
+    assert "bit_delay:\n        ldy #14" in source
     assert "PA7 as output" not in source
+
+
+def test_recovery_and_action_metadata_are_wired() -> None:
+    protocol = (ROOT / "src/rubp.asm").read_text()
+    main = (ROOT / "src/main.asm").read_text()
+    input_source = (ROOT / "src/input.asm").read_text()
+
+    # HELLO must use the unassigned sender ID, not accidentally claim seat 0.
+    init = protocol[protocol.index("rubp_init:"):protocol.index("build_header:")]
+    assert "lda #$ff" in init
+    assert "sta player_id_lo" in init
+    assert "sta player_id_hi" in init
+
+    # Both actions carry the last authoritative state hash when available.
+    assert "tx_buffer+PAYLOAD_START+36" in protocol
+    assert "tx_buffer+PAYLOAD_START+37,x" in protocol
+    assert "tx_buffer+PAYLOAD_START+4" in protocol
+    assert "tx_buffer+PAYLOAD_START+5,x" in protocol
+
+    # Recovery metadata is not discarded and ERROR requests a fresh pair.
+    assert "process_hand_sync:" in protocol
+    assert "rx_buffer+PAYLOAD_START+33,x" in protocol
+    assert "rx_buffer+PAYLOAD_START+40,x" in protocol
+    assert "jsr send_sync_request" in main
+
+    # The wire format permits at most four cards in one play action.
+    assert "cmp #4" in input_source
+    assert "bcs ts_done" in input_source
+
+
+def test_canonical_fixture_when_supplied_by_ci() -> None:
+    path = os.environ.get("RUBP_FIXTURE")
+    if not path:
+        return
+    fixture = json.loads(Path(path).read_text())
+    messages = {message["name"]: message for message in fixture["messages"]}
+    for name in ("hello", "play_card", "draw_card", "game_state", "hand_sync", "sync_request"):
+        encoded = bytes.fromhex(messages[name]["hex"])
+        assert len(encoded) == 64
+        assert encoded[:5] == b"RACH\x01"
 
 
 if __name__ == "__main__":
     test_wire_constants()
     test_prg_run_trampoline()
     test_real_vic20_user_port_pins()
+    test_recovery_and_action_metadata_are_wired()
+    test_canonical_fixture_when_supplied_by_ci()
     print("VIC-20 RUBP/PRG conformance checks passed")
