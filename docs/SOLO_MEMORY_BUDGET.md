@@ -18,18 +18,19 @@ The 8K expansion exposes `$1200-$3FFF`; CODE occupies `$1210-$3FFF`:
 | Item | Bytes |
 |---|---:|
 | Linker CODE capacity | 11,760 |
-| Current production CODE payload | 6,156 |
-| Current unused CODE | 5,604 |
+| Current production CODE payload | 6,771 |
+| Current unused CODE | 4,989 |
 | Required contingency | 2,048 |
 | First-playable CODE ceiling | 9,712 |
-| Remaining first-slice implementation allowance | 3,556 |
+| Remaining first-slice implementation allowance | 2,941 |
 
 `tests/check_memory_budget.py` reads the fresh ld65 map, emits
 `build/memory-budget.json`, and fails once production CODE crosses 9,712 bytes.
 CI retains the JSON as an artifact.
 
-The current production PRG is 6,173 bytes including its load address, BASIC
-trampoline and padding. The test-only fixture harness is 6,514 bytes; its
+The current production PRG is 6,788 bytes including its load address, BASIC
+trampoline and padding. The test-only fixture harness adds executable catalogue,
+rejection, play and packed-deck draw assertions; its
 fixture and validation code are excluded from production.
 
 ## Resident ownership and lifetime
@@ -78,6 +79,13 @@ card identity, including Ace nomination expansion and multi-card stacks, so it
 does not depend on a host language's array order. Forced draws, draw/skip
 counter rules and nominated-suit legality share the same enumerator.
 
+`APPLY_ACTION` now validates an indexed action before the first workspace
+write, then applies canonical card order, nomination, draw/skip attacks, red
+and black Jacks, reversals, finish marking and two-player turn advancement.
+Packed-deck draws execute directly on the 6-bit stream. Empty-deck discard
+reconstruction remains the next transition checkpoint; until it lands, a draw
+stops when the packed deck is empty rather than claiming full conformance.
+
 ## Planned first-slice code budget
 
 | Component | Ceiling |
@@ -93,8 +101,8 @@ counter rules and nominated-suit legality share the same enumerator.
 That plan finishes at 9,607 CODE bytes, leaving 2,153 bytes. Each stage is
 measured from the linker map rather than trusted from this estimate.
 
-The indexed-action checkpoint consumed 559 of the 1,600-byte legality/action
-ceiling. Its executable catalogue tests are intentionally exhaustive rather
+The indexed-action and application checkpoints have consumed 1,174 of the
+1,600-byte legality/action ceiling. Their executable catalogue tests are intentionally exhaustive rather
 than timing representative; the playable UI will cache a count and request
 only the selected indexed action.
 

@@ -18,10 +18,12 @@ def main() -> None:
         raise SystemExit("missing EMU198X_DIR with a release VIC-20 runner")
     labels = (ROOT / "build/solo-kernel-spike.lbl").read_text()
     names = [
-        "solo_fixture_result", "solo_fixture_stage", "solo_action_count",
+        "solo_fixture_result", "solo_fixture_stage", "solo_apply_fixture_stage",
+        "solo_action_count",
         "solo_action_kind", "solo_action_rank", "solo_action_suit_mask",
         "solo_action_nomination", "solo_group_mask", "solo_valid_mask",
-        "solo_scan_rank",
+        "solo_scan_rank", "solo_debug_hand0", "solo_debug_hand1",
+        "solo_debug_hand4", "solo_debug_hand5",
     ]
     addresses = {}
     for name in names:

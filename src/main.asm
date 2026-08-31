@@ -33,7 +33,12 @@ basic_end:
 .ifdef SOLO_KERNEL_TEST
         jsr solo_fixture_load
         jsr solo_fixture_validate
+        bcs skt_fail
+        jsr solo_apply_fixture_validate
+        bcs skt_fail
+        jsr solo_draw_fixture_validate
         bcc skt_ok
+skt_fail:
         lda #$ff
         bne skt_store
 skt_ok:
