@@ -64,8 +64,11 @@ welcome_ok:
 
         ; Wait for game to start
         jsr wait_for_game
+        bcc game_started
+        jmp reconnect_active
 
         ; Main game loop
+game_started:
 main_loop:
         jsr sound_update
         jsr net_recv
@@ -128,12 +131,63 @@ ml_check_end:
         jmp player_won
 
 ml_no_msg:
+        lda net_status
+        and #NET_ERROR
+        bne reconnect_active
 ml_input:
         ; Check if it's our turn
         lda current_turn
         cmp my_index
         beq ml_our_turn
         jmp main_loop
+
+reconnect_active:
+        lda #3
+        sta reconnect_attempts
+ra_try:
+        jsr display_clear
+        lda #<msg_reconnecting
+        sta ZP_PTR1
+        lda #>msg_reconnecting
+        sta ZP_PTR1+1
+        lda #7
+        jsr print_centered
+        jsr do_connect
+        bcs ra_failed
+        jsr send_hello
+        jsr wait_for_welcome
+        bcs ra_failed
+        jsr send_sync_request
+        jmp main_loop
+ra_failed:
+        dec reconnect_attempts
+        bne ra_try
+        jsr display_clear
+        lda #<msg_reconnect_failed
+        sta ZP_PTR1
+        lda #>msg_reconnect_failed
+        sta ZP_PTR1+1
+        lda #6
+        jsr print_centered
+        lda #<msg_reconnect_choice
+        sta ZP_PTR1
+        lda #>msg_reconnect_choice
+        sta ZP_PTR1+1
+        lda #9
+        jsr print_centered
+ra_wait:
+        jsr wait_key
+        cmp #'R'
+        beq reconnect_active
+        cmp #'r'
+        beq reconnect_active
+        cmp #'Q'
+        beq ra_quit
+        cmp #'q'
+        beq ra_quit
+        jmp ra_wait
+ra_quit:
+        jmp quit_game
 ml_our_turn:
 
 .ifdef E2E_AUTOPLAY
@@ -365,7 +419,12 @@ sha_yes:
 .proc wait_for_welcome
 wfw_loop:
         jsr net_recv
-        bcs wfw_loop
+        bcc wfw_frame
+        lda net_status
+        and #NET_ERROR
+        bne wfw_error
+        jmp wfw_loop
+wfw_frame:
         jsr rubp_validate
         bcs wfw_loop
         lda rx_buffer+HDR_TYPE
@@ -404,20 +463,21 @@ wfw_error:
 wfg_loop:
         jsr net_recv
         bcc wfg_message
+        lda net_status
+        and #NET_ERROR
+        bne wfg_link_lost
         inc wait_game_lo
         bne wfg_loop
         inc wait_game_hi
         lda wait_game_hi
-        cmp #$40
+        cmp #$08
         bcc wfg_loop
         ; Pull a quiet authoritative snapshot if the initial unsolicited burst
         ; crossed a software-UART boundary badly enough to lose GAME_STATE.
         lda #0
         sta wait_game_lo
         sta wait_game_hi
-.ifndef E2E_AUTOPLAY
         jsr send_sync_request
-.endif
         jmp wfg_loop
 wfg_message:
         lda #0
@@ -442,6 +502,7 @@ wfg_message:
 
 wfg_state:
         jsr process_game_state
+        clc
         rts
 wfg_start:
         jsr process_game_start
@@ -450,6 +511,9 @@ wfg_start:
 wfg_sync:
         jsr process_hand_sync
         jmp wfg_loop
+wfg_link_lost:
+        sec
+        rts
 .endproc
 
 render_waiting:
@@ -511,6 +575,12 @@ msg_conn_fail:
         .byte "CONNECTION FAILED", 0
 msg_retry:
         .byte "R RETRY E EDIT Q QUIT", 0
+msg_reconnecting:
+        .byte "LINK LOST-RECONNECT", 0
+msg_reconnect_failed:
+        .byte "RECONNECT FAILED", 0
+msg_reconnect_choice:
+        .byte "R RETRY Q QUIT", 0
 msg_you_lose:
         .byte "YOU LOSE!", 0
 msg_you_finish:
@@ -534,6 +604,8 @@ msg_select_card:
 wait_game_lo:
         .byte 0
 wait_game_hi:
+        .byte 0
+reconnect_attempts:
         .byte 0
 
 ; -----------------------------------------------------------------------------

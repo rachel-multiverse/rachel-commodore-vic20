@@ -18,6 +18,11 @@ rubp_init:
         sta state_hash_present
         sta game_over_flag
         sta chosen_suit
+        ldx #7
+ri_token:
+        sta reconnect_token,x
+        dex
+        bpl ri_token
         lda #$ff
         sta player_id_lo
         sta player_id_hi
@@ -146,6 +151,7 @@ rc_no_poly:
 ; Send HELLO message with player name and platform ID
 ; -----------------------------------------------------------------------------
 send_hello:
+        jsr ensure_reconnect_token
         lda #MSG_HELLO
         jsr build_header
 
@@ -172,6 +178,16 @@ sh_name_done:
         lda #RACHEL_SPEC_VER
         sta tx_buffer+PAYLOAD_START+19
 
+        ; The client creates and retains this token for the loaded session.
+        ; Reusing it with the assigned game ID reclaims the same server seat.
+        ldx #0
+sh_token:
+        lda reconnect_token,x
+        sta tx_buffer+PAYLOAD_START+20,x
+        inx
+        cpx #8
+        bne sh_token
+
         ; Optional private-room code, eight bytes and null-padded.
         ldx #0
 sh_room:
@@ -186,6 +202,45 @@ sh_room:
         sta tx_buffer+PAYLOAD_START+36
 
         jsr net_send
+        rts
+
+; Seed an opaque, non-zero session token once. User typing time, raster phase,
+; the free-running VIA timer and connection details all contribute; the token
+; then remains stable in RAM across link retries.
+ensure_reconnect_token:
+        lda reconnect_token
+        ora reconnect_token+1
+        ora reconnect_token+2
+        ora reconnect_token+3
+        ora reconnect_token+4
+        ora reconnect_token+5
+        ora reconnect_token+6
+        ora reconnect_token+7
+        bne ert_done
+        lda JIFFY_LOW
+        eor VIC_RASTER
+        eor VIA1_T1CL
+        eor ip_addr
+        eor ip_addr+3
+        eor room_code
+        ora #1
+        sta ZP_TEMP1
+        ldx #0
+ert_loop:
+        lda ZP_TEMP1
+        asl
+        bcc ert_no_poly
+        eor #$1d
+ert_no_poly:
+        eor VIA1_T1CL
+        eor VIC_RASTER
+        eor room_code,x
+        sta reconnect_token,x
+        sta ZP_TEMP1
+        inx
+        cpx #8
+        bne ert_loop
+ert_done:
         rts
 
 player_name:
@@ -674,6 +729,7 @@ player_id_lo:   .byte 0
 player_id_hi:   .byte 0
 game_id_lo:     .byte 0
 game_id_hi:     .byte 0
+reconnect_token:.res 8, 0
 nominated_suit: .byte $FF
 chosen_suit:     .byte 0
 

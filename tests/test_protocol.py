@@ -154,7 +154,7 @@ def test_recovery_and_action_metadata_are_wired() -> None:
     assert "process_player_list_welcome:" in protocol
     assert "cmp #MSG_HAND_SYNC" in main
     assert "wfg_sync:" in main
-    assert "cmp #$40" in main
+    assert "cmp #$08" in main
     assert "jsr send_sync_request" in main[main.index("wfg_loop:"):]
     assert "sta tx_buffer+PAYLOAD_START+36" in protocol
     assert "send_sync_ack:" in protocol
@@ -261,6 +261,26 @@ def test_private_room_and_connection_retry_are_wired() -> None:
     assert "jmp connect_details" in main
 
 
+def test_active_game_reconnect_reclaims_and_resynchronizes() -> None:
+    main = (ROOT / "src/main.asm").read_text()
+    protocol = (ROOT / "src/rubp.asm").read_text()
+    wifi = (ROOT / "src/net/wifi.asm").read_text()
+    assert "ensure_reconnect_token:" in protocol
+    assert "sta tx_buffer+PAYLOAD_START+20,x" in protocol
+    assert "reconnect_token:.res 8" in protocol
+    assert "track_closed_status:" in wifi
+    assert "$43,$4c,$4f,$53,$45,$44" in wifi
+    assert "lda #NET_ERROR\n        sta net_status" in wifi
+    assert "track_send_error:" in wifi
+    assert "$45,$52,$52,$4f,$52" in wifi
+    assert "reconnect_active:" in main
+    assert "lda #3\n        sta reconnect_attempts" in main
+    assert "jsr send_hello\n        jsr wait_for_welcome" in main
+    assert "jsr send_sync_request\n        jmp main_loop" in main
+    assert "wfg_link_lost:\n        sec\n        rts" in main
+    assert "LINK LOST-RECONNECT" in main
+
+
 def test_video_capture_workflow_is_reproducible() -> None:
     capture = (ROOT / "tests/capture_video.py").read_text()
     makefile = (ROOT / "Makefile").read_text()
@@ -274,7 +294,10 @@ def test_video_capture_workflow_is_reproducible() -> None:
     makefile = (ROOT / "Makefile").read_text()
     assert "e2e-eight-player: e2e-prg" in makefile
     assert 'RACHEL_E2E_AI_PLAYERS=7' in makefile
+    assert "e2e-reconnect: e2e-prg" in makefile
+    assert "RACHEL_E2E_DROP_AFTER_SERVER_FRAMES=10" in makefile
     assert 'RACHEL_E2E_MIN_PLAYERS", "2"' in full_game
+    assert '"reclaimed player" not in server_text' in full_game
 
 
 def test_release_bundle_and_physical_checklist_exist() -> None:
@@ -330,6 +353,7 @@ if __name__ == "__main__":
     test_player_feedback_and_terminal_result_are_wired()
     test_native_sound_and_joystick_feedback_are_non_blocking()
     test_private_room_and_connection_retry_are_wired()
+    test_active_game_reconnect_reclaims_and_resynchronizes()
     test_video_capture_workflow_is_reproducible()
     test_release_bundle_and_physical_checklist_exist()
     test_rubp_v2_crc_is_generated_and_required()

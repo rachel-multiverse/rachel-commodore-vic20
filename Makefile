@@ -15,7 +15,7 @@ E2E_OBJECT = $(BUILD_DIR)/main-e2e.o
 # VIC-20 with 8KB expansion config
 CONFIG = vic20-8k.cfg
 
-.PHONY: all test e2e-prg e2e-full-game e2e-eight-player capture-video release clean
+.PHONY: all test e2e-prg e2e-full-game e2e-eight-player e2e-reconnect capture-video release clean
 
 all: $(BUILD_DIR) $(TARGET)
 	@echo "Built: $(TARGET)"
@@ -41,6 +41,12 @@ e2e-full-game: e2e-prg
 e2e-eight-player: e2e-prg
 	RACHEL_E2E_MIN_PLAYERS=8 RACHEL_E2E_AI_PLAYERS=7 \
 	RACHEL_E2E_GAME_FRAMES=90000 RACHEL_E2E_OUTPUT=e2e-output-8 \
+	python3 tests/full_game_e2e.py
+
+e2e-reconnect: e2e-prg
+	RACHEL_E2E_DROP_AFTER_SERVER_FRAMES=10 RACHEL_E2E_GAME_FRAMES=60000 \
+	RACHEL_E2E_WRITE_INTERVAL=300ms \
+	RACHEL_E2E_OUTPUT=e2e-output-reconnect \
 	python3 tests/full_game_e2e.py
 
 capture-video: e2e-prg

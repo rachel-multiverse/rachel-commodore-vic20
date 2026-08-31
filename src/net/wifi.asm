@@ -110,6 +110,8 @@ nc_uart_drain_inner:
         ; CRC-valid WELCOME are the authoritative connection checks.
         lda #NET_CONNECTED
         sta net_status
+        lda #0
+        sta close_match
         clc
         rts
 
@@ -433,6 +435,12 @@ net_send:
         ; after the baud reduction the prompt text itself is advisory because
         ; sampling it is less reliable than the CRC-protected payload exchange.
         jsr wait_send_prompt
+        lda net_status
+        and #NET_ERROR
+        beq ns_send_payload
+        sec
+        rts
+ns_send_payload:
 
         ; Send 64 bytes from tx_buffer
         ldx #0
@@ -458,6 +466,8 @@ net_recv:
         ; RUBP magic so modem status text can never be mistaken for a frame.
 nr_find_r:
         jsr serial_recv
+        bcs nr_none
+        jsr track_closed_status
         bcs nr_none
         cmp #$52                 ; ASCII 'R'
         bne nr_find_r
@@ -506,11 +516,51 @@ nr_none:
         sec
         rts
 
+; Track the unsolicited ASCII "CLOSED" status emitted by real ESP-AT modems.
+; Called only while scanning outside a RUBP frame. Returns C=1 on link loss.
+track_closed_status:
+        pha
+        ldx close_match
+        cmp closed_text,x
+        beq tcs_match
+        cmp #$43                 ; ASCII 'C'
+        bne tcs_reset
+        lda #1
+        bne tcs_store
+tcs_reset:
+        lda #0
+tcs_store:
+        sta close_match
+        pla
+        clc
+        rts
+tcs_match:
+        inx
+        cpx #6
+        beq tcs_closed
+        stx close_match
+        pla
+        clc
+        rts
+tcs_closed:
+        lda #0
+        sta close_match
+        lda #NET_ERROR
+        sta net_status
+        pla
+        sec
+        rts
+
+closed_text:
+        .byte $43,$4c,$4f,$53,$45,$44
+
 rubp_magic:
         .byte $52,$41,$43,$48
 
 ; Wait for the ESP-AT CIPSEND prompt.
 wait_send_prompt:
+        lda #0
+        sta send_error_match
         ldy #0
 wsp_loop:
         jsr serial_recv
@@ -520,6 +570,8 @@ wsp_loop:
         sec
         rts
 wsp_byte:
+        jsr track_send_error
+        bcs wsp_error
         cmp #$3e                 ; ASCII '>'
         beq wsp_ready
         iny
@@ -529,6 +581,47 @@ wsp_byte:
 wsp_ready:
         clc
         rts
+wsp_error:
+        lda #NET_ERROR
+        sta net_status
+        sec
+        rts
+
+; Return C=1 after the explicit ASCII "ERROR" rejection from ESP-AT.
+; Timeout alone remains advisory because the software receiver can miss `>`.
+track_send_error:
+        pha
+        ldx send_error_match
+        cmp send_error_text,x
+        beq tse_match
+        cmp #$45                 ; ASCII 'E'
+        bne tse_reset
+        lda #1
+        bne tse_store
+tse_reset:
+        lda #0
+tse_store:
+        sta send_error_match
+        pla
+        clc
+        rts
+tse_match:
+        inx
+        cpx #5
+        beq tse_error
+        stx send_error_match
+        pla
+        clc
+        rts
+tse_error:
+        lda #0
+        sta send_error_match
+        pla
+        sec
+        rts
+
+send_error_text:
+        .byte $45,$52,$52,$4f,$52
 
 ; -----------------------------------------------------------------------------
 ; Close network connection
@@ -547,6 +640,8 @@ at_cipclose:
 ; Status
 net_status:     .byte 0
 bytes_pending:  .byte 0
+close_match:    .byte 0
+send_error_match:.byte 0
 tx_bit_delay_count: .byte 13
 rx_bit_delay_count: .byte RX_BIT_DELAY_COUNT
 rx_half_delay_count:.byte RX_HALF_DELAY_COUNT

@@ -19,7 +19,9 @@ C/PB0 for RX.
 2. Confirm the title, IP prompt and optional room-code prompt are centred and
    legible, with no wrap or stale characters.
 3. Join both a public lobby (blank room code) and a private lobby.
-4. Disconnect the server once and verify retry, edit and quit choices.
+4. Interrupt the network during an active game. Verify automatic reconnection,
+   the same player number and hand, then complete the match. Also verify the
+   manual retry/quit prompt by keeping the server unavailable for three tries.
 5. Play using keyboard, then joystick: move, select, nominate an Ace suit,
    play and draw. Check that held directions do not repeat uncontrollably.
 6. Confirm each short sound cue without missed network messages.

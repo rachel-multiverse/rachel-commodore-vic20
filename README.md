@@ -110,6 +110,10 @@ Logs and the final screenshot are retained under `build/e2e-output/`. The test
 requires the server to finish and rejects any run containing a client error.
 `make e2e-eight-player` runs the same production path with seven AI opponents
 and retains its independent evidence under `build/e2e-output-8/`.
+`make e2e-reconnect` uses a TCP proxy to sever an active match, requires the Go
+server to report that the original player was reclaimed, and then completes
+the game. It uses 300 ms host frame spacing, slightly above the approximately
+267 ms needed to receive a complete 64-byte frame at 2400 baud.
 
 For a reproducible presentation recording of the same authentic emulator run,
 install `ffmpeg` and run `make capture-video` with `EMU198X_DIR` set. This saves
@@ -135,6 +139,11 @@ Keyboard and joystick are both supported. Left/right moves through the hand;
 Space or Fire selects a card; up/down chooses the Ace suit. Fire+up plays the
 selection and Fire+down draws. Short, non-blocking VIC sound cues acknowledge
 movement, selection, actions, errors and the final result.
+
+If an established TCP link closes, the client retains its opaque session token
+and assigned game ID, reconnects automatically, reclaims the same seat and
+requests an authoritative public/private state refresh. Three automatic tries
+are followed by a manual retry-or-quit prompt.
 
 ## Files
 
