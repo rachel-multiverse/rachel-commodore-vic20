@@ -306,12 +306,16 @@ def test_release_bundle_and_physical_checklist_exist() -> None:
     makefile = (ROOT / "Makefile").read_text()
     packager = (ROOT / "scripts/package_release.py").read_text()
     checklist = (ROOT / "docs/HARDWARE_TESTING.md").read_text()
+    release_status = (ROOT / "docs/RELEASE_STATUS.md").read_text()
     assert "release: test" in makefile
     assert '"rachel-vic20.prg"' in packager
     assert "sha256(archive.read_bytes())" in packager
     assert "PAL VIC-20" in checklist
     assert "NTSC serial operation is" in checklist
     assert "eight-player match" in checklist
+    assert '"docs/RELEASE_STATUS.md"' in packager
+    assert "emulator-verified PAL release candidate" in release_status
+    assert "does **not** expose disk save/resume" in release_status
 
 
 def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
@@ -322,12 +326,15 @@ def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     assert "solo-kernel-e2e: solo-kernel-spike" in makefile
     assert "-D SOLO_KERNEL_TEST=1" in makefile
     assert '.include "solo.asm"' in main
+    assert "solo_get_info:" in solo
+    assert '.byte "RHKI"' in solo
+    assert ".word $000d" in solo
     assert "SOLO_WS_SIZE       = 80" in solo
     assert "SOLO_SCRATCH_SIZE  = 16" in solo
     budget = (ROOT / "docs/SOLO_MEMORY_BUDGET.md").read_text()
     assert "Proceed with one PRG" in budget
     assert "2,048" in budget
-    assert "1,834" in budget
+    assert "1,037" in budget
     assert "RACHEL ONLINE" in budget and "RACHEL SOLO" in budget
 
 

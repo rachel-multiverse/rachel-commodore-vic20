@@ -31,6 +31,32 @@ SOLO_ACTION_PLAY   = 0
 SOLO_ACTION_DRAW   = 1
 SOLO_NO_SUIT       = $ff
 SOLO_SAVE_BYTES    = 87
+SOLO_INFO_BYTES    = 19
+
+; GET_INFO-compatible compact-port descriptor at ZP_PTR1. It uses the shared
+; RHKI envelope but advertises only what this allocation-free two-player port
+; actually exposes: deterministic indexed actions, opaque workspace and no
+; dynamic allocation. Full action tables and binary apply summaries are zero.
+solo_get_info:
+        ldy #0
+sgi_copy:
+        lda solo_info_data,y
+        sta (ZP_PTR1),y
+        iny
+        cpy #SOLO_INFO_BYTES
+        bcc sgi_copy
+        rts
+
+solo_info_data:
+        .byte "RHKI"
+        .word 1                  ; kernel ABI
+        .word 1                  ; RachelSpec
+        .byte 2,2                ; fixed two-player profile
+        .byte 112,7              ; action count / portable action bytes
+        .word 0                  ; no resident full action table
+        .word 0                  ; no binary apply-summary buffer
+        .byte 53                 ; count + maximum hand
+        .word $000d              ; order, opaque workspace, no allocation
 
 ; Complete offline front end. The compact kernel remains the sole authority:
 ; keyboard/joystick input is accepted only by finding its exact catalogue
@@ -1681,12 +1707,18 @@ solo_ai_soak_remaining: .byte 0
 solo_complete_remaining:.byte 0
 solo_complete_pages:    .byte 0
 solo_complete_action_count:.byte 0
+solo_complete_games_remaining:.byte 0
+solo_complete_games_passed:.byte 0
+solo_complete_games_bounded:.byte 0
+solo_complete_failure:  .byte 0
 
 .ifdef SOLO_KERNEL_TEST
 .export solo_fixture_result, solo_fixture_stage, solo_apply_fixture_stage
 .export solo_new_game_fixture_stage
 .export solo_rng_fixture_stage
 .export solo_complete_remaining, solo_complete_pages
+.export solo_complete_games_passed, solo_complete_games_bounded
+.export solo_complete_failure
 .export solo_action_count, solo_action_kind
 .export solo_action_rank, solo_action_suit_mask, solo_action_nomination
 .export solo_group_mask, solo_valid_mask, solo_scan_rank
@@ -1709,6 +1741,26 @@ sfl_loop:
         inx
         cpx #SOLO_WS_SIZE
         bne sfl_loop
+        rts
+
+solo_info_fixture_validate:
+        lda #<solo_info_fixture
+        sta ZP_PTR1
+        lda #>solo_info_fixture
+        sta ZP_PTR1+1
+        jsr solo_get_info
+        ldx #0
+sifv_compare:
+        lda solo_info_fixture,x
+        cmp solo_info_data,x
+        bne sifv_bad
+        inx
+        cpx #SOLO_INFO_BYTES
+        bcc sifv_compare
+        clc
+        rts
+sifv_bad:
+        sec
         rts
 
 ; C=0 means the fixture reached the expected fields in the overlay.
@@ -2241,13 +2293,22 @@ saifv_bad:
 ; path used by both front-end participants. Seed 42 must reach a winner within
 ; the byte-sized safety bound.
 solo_complete_game_fixture_validate:
+        lda #16
+        sta solo_complete_games_remaining
+        lda #0
+        sta solo_complete_games_passed
+        sta solo_complete_games_bounded
+        sta solo_complete_failure
+scgfv_new_game:
         lda #0
         ldx #7
 scgfv_seed_clear:
         sta solo_workspace+SW_RANDOM_SEED,x
         dex
         bpl scgfv_seed_clear
-        lda #42
+        lda solo_complete_games_passed
+        clc
+        adc #1
         sta solo_workspace+SW_RANDOM_SEED
         jsr solo_new_game
         lda #0
@@ -2258,24 +2319,40 @@ scgfv_turn:
         lda solo_workspace+SW_FINISH_COUNT
         bne scgfv_done
         jsr solo_get_action_count
-        beq scgfv_bad
+        bne scgfv_have_action
+        lda #1
+        bne scgfv_fail
+scgfv_have_action:
         sta solo_complete_action_count
         jsr solo_rng_next
         lda solo_complete_action_count
         jsr solo_rng_mod
         jsr solo_apply_action
-        bcs scgfv_bad
+        bcc scgfv_applied
+        lda #2
+        bne scgfv_fail
+scgfv_applied:
         dec solo_complete_remaining
         bne scgfv_turn
         dec solo_complete_pages
         bne scgfv_turn
-scgfv_bad:
+        inc solo_complete_games_bounded
+        jmp scgfv_game_complete
+scgfv_fail:
+        sta solo_complete_failure
         sec
         rts
 scgfv_done:
         lda solo_workspace+SW_FINISH_ORDER
         cmp #2
-        bcs scgfv_bad
+        bcc scgfv_winner_ok
+        lda #4
+        bne scgfv_fail
+scgfv_winner_ok:
+scgfv_game_complete:
+        inc solo_complete_games_passed
+        dec solo_complete_games_remaining
+        bne scgfv_new_game
         clc
         rts
 
@@ -2283,6 +2360,8 @@ solo_save_fixture_a:
         .res SOLO_SAVE_BYTES,0
 solo_save_fixture_b:
         .res SOLO_SAVE_BYTES,0
+solo_info_fixture:
+        .res SOLO_INFO_BYTES,0
 
 ; LSB-first 6-bit deck ordinals: ace hearts (12), two spades (39).
 ; Hands: five hearts; three clubs plus jack spades.

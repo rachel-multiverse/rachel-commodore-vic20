@@ -7,9 +7,9 @@ image leaves enough measured CODE space for a compact two-player kernel while
 retaining a hard 2 KiB contingency. A disk menu with separate online and solo
 programs remains a packaging fallback, not the current design.
 
-This is a feasibility result, not yet a claim that solo play is implemented.
-The checked-in spike proves the workspace lifetime, canonical fixture import
-shape, linker budget and executable fixture loader.
+Solo play is now implemented in the same production PRG as online play. The
+title selects either mode, the existing renderer exposes the full hand, and
+human input is accepted only by matching an indexed legal kernel action.
 
 ## Measured baseline
 
@@ -18,17 +18,17 @@ The 8K expansion exposes `$1200-$3FFF`; CODE occupies `$1210-$3FFF`:
 | Item | Bytes |
 |---|---:|
 | Linker CODE capacity | 11,760 |
-| Current production CODE payload | 7,878 |
-| Current unused CODE | 3,882 |
+| Current production CODE payload | 8,675 |
+| Current unused CODE | 3,085 |
 | Required contingency | 2,048 |
 | First-playable CODE ceiling | 9,712 |
-| Remaining first-slice implementation allowance | 1,834 |
+| Remaining first-slice implementation allowance | 1,037 |
 
 `tests/check_memory_budget.py` reads the fresh ld65 map, emits
 `build/memory-budget.json`, and fails once production CODE crosses 9,712 bytes.
 CI retains the JSON as an artifact.
 
-The current production PRG is 7,895 bytes including its load address, BASIC
+The current production PRG is 8,692 bytes including its load address, BASIC
 trampoline and padding. The test-only fixture harness adds executable catalogue,
 rejection, play and packed-deck draw assertions; its
 fixture and validation code are excluded from production.
@@ -65,9 +65,9 @@ The first slice implements the semantic equivalents of:
 - `APPLY_ACTION` — mutate the compact workspace and return the bounded summary
 
 `LIST_ACTIONS` is deliberately excluded: its 806-byte table would erase useful
-contingency for no gameplay benefit. `SAVE_STATE`/`LOAD_STATE` are deferred
-until the playable slice proves its real code size. Their external RKSI image
-may reuse transport storage only while offline.
+contingency for no gameplay benefit. `SAVE_STATE`/`LOAD_STATE` are implemented
+for the compact in-memory format, but production disk I/O is deferred as
+described in `RELEASE_STATUS.md`.
 
 The deterministic opponent consumes indexed legal actions and does not
 implement its own legality rules.
@@ -146,6 +146,12 @@ result byte, proving the loader, overlay and indexed catalogue execute rather
 than merely assemble. `make solo-kernel-e2e` parses the current linker label dynamically,
 runs the harness and checks the byte, so later code movement cannot stale the
 test address.
+
+The executable harness now exercises 16 deterministic seeds, each with a hard
+1,024-turn bound. It exports games exercised, bounded outcomes and a precise
+failure code. A legal game that reaches the bound is reported separately—the
+finite deck can be recycled indefinitely—while missing/rejected actions,
+invalid winners and state-transition failures fail the run.
 
 ## Go/no-go and disk fallback
 

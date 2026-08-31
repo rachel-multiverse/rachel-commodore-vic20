@@ -16,20 +16,23 @@ C/PB0 for RX.
 ## Release acceptance
 
 1. Load the PRG with the 8KB expansion enabled and enter `RUN`.
-2. Confirm the title, IP prompt and optional room-code prompt are centred and
-   legible, with no wrap or stale characters.
-3. Join both a public lobby (blank room code) and a private lobby.
-4. Interrupt the network during an active game. Verify automatic reconnection,
+2. Confirm the title offers `S SOLO` and `O ONLINE`, centred and legible.
+3. Choose Solo, play with keyboard and joystick through a complete match,
+   including an Ace nomination and a legal draw. Confirm win/loss and `R`
+   replay, then use `O` to return to the mode menu.
+4. Choose Online and confirm the IP and optional room-code prompts. Join both a
+   public lobby (blank room code) and a private lobby.
+5. Interrupt the network during an active game. Verify automatic reconnection,
    the same player number and hand, then complete the match. Also verify the
    manual retry/quit prompt by keeping the server unavailable for three tries.
-5. Play using keyboard, then joystick: move, select, nominate an Ace suit,
+6. Play online using keyboard, then joystick: move, select, nominate an Ace suit,
    play and draw. Check that held directions do not repeat uncontrollably.
-6. Confirm each short sound cue without missed network messages.
-7. Complete a two-player game and verify finish position, spectator state,
+7. Confirm each short sound cue without missed network messages.
+8. Complete a two-player game and verify finish position, spectator state,
    final card-holder and turn count.
-8. Join an eight-player match and verify all player counts and the current
+9. Join an eight-player match and verify all player counts and the current
    player remain readable throughout.
-9. Power-cycle and repeat one complete match from a fresh load.
+10. Power-cycle and repeat one complete match from a fresh load.
 
 Record VIC model/revision, PAL/NTSC, RAM expansion, modem firmware, adapter,
 server commit, PRG checksum and any observed failure. NTSC serial operation is

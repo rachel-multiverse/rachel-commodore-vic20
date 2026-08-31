@@ -22,6 +22,8 @@ def main() -> None:
         "solo_new_game_fixture_stage", "solo_action_count",
         "solo_rng_fixture_stage",
         "solo_complete_remaining", "solo_complete_pages",
+        "solo_complete_games_passed", "solo_complete_games_bounded",
+        "solo_complete_failure",
         "solo_action_kind", "solo_action_rank", "solo_action_suit_mask",
         "solo_action_nomination", "solo_group_mask", "solo_valid_mask",
         "solo_scan_rank", "solo_debug_hand0", "solo_debug_hand1",
@@ -45,7 +47,7 @@ def main() -> None:
     session.write_text(json.dumps([
         # The fixture now includes a complete deterministic match in addition
         # to the focused kernel cases.
-        {"action": "run_frames", "frames": 30000},
+        {"action": "run_frames", "frames": 70000},
         *(
             {
                 "action": "memory_read", "addr": item,
@@ -63,10 +65,14 @@ def main() -> None:
     ], cwd=EMU, check=True, text=True, capture_output=True)
     report = json.loads(result.stdout)
     reads = [item for item in report["observations"] if item["kind"] == "memory_read"]
-    if len(reads) != len(addresses) or reads[0]["bytes"] != [0xA5]:
-        debug = dict(zip(addresses, (item["bytes"] for item in reads)))
+    debug = dict(zip(addresses, (item["bytes"] for item in reads)))
+    if (len(reads) != len(addresses) or reads[0]["bytes"] != [0xA5]
+            or debug["solo_complete_games_passed"] != [16]
+            or debug["solo_complete_failure"] != [0]):
         raise SystemExit(f"solo fixture validation failed: {debug}")
-    print(f"Executable compact solo fixture passed at ${address:04X}")
+    bounded = debug["solo_complete_games_bounded"][0]
+    print(f"Executable compact solo fixture passed at ${address:04X}; "
+          f"16 seeds exercised, {bounded} reached the 1024-turn bound")
 
 
 if __name__ == "__main__":

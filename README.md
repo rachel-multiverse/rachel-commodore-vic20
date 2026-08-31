@@ -26,7 +26,8 @@ harness, while `make test` enforces a 2 KiB CODE contingency. See
 
 `make release` creates a distributable ZIP and SHA-256 checksum under
 `build/release/`, containing the production PRG, instructions and physical
-hardware test checklist.
+hardware test checklist. See `docs/RELEASE_STATUS.md` for the exact claims and
+remaining real-hardware blockers.
 
 ## Running
 
@@ -147,10 +148,11 @@ The VIC-20's 22×23 character display is used as:
 - Lines 14-16: Turn state and controls
 - Lines 18-22: Player's hand
 
-Keyboard and joystick are both supported. Left/right moves through the hand;
-Space or Fire selects a card; up/down chooses the Ace suit. Fire+up plays the
-selection and Fire+down draws. Short, non-blocking VIC sound cues acknowledge
-movement, selection, actions, errors and the final result.
+Keyboard and joystick are both supported. Left/right moves through the hand
+and up/down chooses the Ace suit. In Solo, Space/Fire or Return/Fire+up plays
+the card under the cursor. Online, Space/Fire selects cards and Return/Fire+up
+plays the selection. `D`/Fire+down draws. Short, non-blocking sound cues
+acknowledge movement, selection, actions, errors and the final result.
 
 If an established TCP link closes, the client retains its opaque session token
 and assigned game ID, reconnects automatically, reclaims the same seat and

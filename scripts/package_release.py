@@ -27,6 +27,7 @@ def main() -> None:
         bundle.write(PRG, staged_name)
         bundle.write(ROOT / "README.md", "README.md")
         bundle.write(ROOT / "docs/HARDWARE_TESTING.md", "HARDWARE_TESTING.md")
+        bundle.write(ROOT / "docs/RELEASE_STATUS.md", "RELEASE_STATUS.md")
     digest = sha256(archive.read_bytes()).hexdigest()
     checksum = archive.with_suffix(archive.suffix + ".sha256")
     checksum.write_text(f"{digest}  {archive.name}\n")

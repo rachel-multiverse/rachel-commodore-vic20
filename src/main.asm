@@ -34,6 +34,8 @@ basic_end:
         jsr solo_fixture_load
         jsr solo_fixture_validate
         bcs skt_fail
+        jsr solo_info_fixture_validate
+        bcs skt_fail
         jsr solo_apply_fixture_validate
         bcs skt_fail
         jsr solo_draw_fixture_validate
