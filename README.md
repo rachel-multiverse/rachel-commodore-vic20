@@ -2,6 +2,15 @@
 
 A VIC-20 client for the Rachel card game, written in 6502 assembly.
 
+| | |
+|---|---|
+| ![Title screen](docs/screenshots/title.png) | ![How many players](docs/screenshots/seat-prompt.png) |
+| ![Eight-seat solo game](docs/screenshots/solo-eight-players.png) | ![Ace suit prompt](docs/screenshots/ace-nomination.png) |
+
+*Title screen; the solo seat prompt; an eight-seat game with unplayable cards
+dimmed; and the Ace suit prompt during an online game. Captured from the
+production PRG under Emu198x — `docs/screenshots/` holds the originals.*
+
 ## Requirements
 
 - **Hardware**: VIC-20 with 8KB+ memory expansion

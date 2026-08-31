@@ -18,18 +18,26 @@ The 8K expansion exposes `$1200-$3FFF`; CODE occupies `$1210-$3FFF`:
 | Item | Bytes |
 |---|---:|
 | Linker CODE capacity | 11,760 |
-| Current production CODE payload | 9,697 |
-| Current unused CODE | 2,063 |
+| Current production CODE payload | 9,426 |
+| Current unused CODE | 2,334 |
 | Required contingency | 2,048 |
 | First-playable CODE ceiling | 9,712 |
-| Remaining first-slice implementation allowance | 15 |
+| Remaining first-slice implementation allowance | 286 |
 
-The allowance fell from 962 to 15 on 31 August 2026, spending 947 bytes on
-issue #10: the visible game-state work (pending attacks, playability, the
-nomination prompt, hand paging, direction), the move from two seats to eight,
-and the block-graphic title banner. The 2,048-byte contingency is untouched
-and the single-PRG decision still holds, but this line is now spent: anything
-further has to free space rather than claim it.
+Issue #10 spent 947 bytes on 31 August 2026 — the visible game-state work
+(pending attacks, playability, the nomination prompt, hand paging, direction),
+the move from two seats to eight, and the block-graphic title banner — taking
+the allowance from 962 to 15. Reclaiming the published kernel API returned 274
+of them and clearing the lobby text on the way into a game spent 3, so the line
+stands at 286 with the 2,048-byte contingency untouched.
+
+`SAVE_STATE`, `LOAD_STATE`, `GET_INFO` and the action-count entry point are
+compiled into the fixture build and left out of the production PRG. Nothing on
+a VIC-20 can call them: there is no external consumer for a descriptor or a
+save image on this machine, and the front end drives `solo_apply_action`
+directly. The fixtures still exercise every one of them, so conformance is
+unaffected; exposing save/resume in the UI later means moving one `.ifdef`
+rather than rewriting anything.
 
 The title banner is drawn from the character ROM's half-block glyphs rather
 than a redefined character set. That is not only a size choice. The VIC can
@@ -114,7 +122,7 @@ sequence with the canonical PRNG and retains the current top card.
 over the packed deck. The executable seed-42 vector matches both hands, the top
 discard, first remaining card and final 64-bit RNG state from RachelEngine.
 
-`SAVE_STATE` and `LOAD_STATE` use a deterministic 87-byte `RKS2` image: magic,
+`SAVE_STATE` and `LOAD_STATE` use a deterministic 125-byte `RKS2` image: magic,
 format version, payload length, the exact 118-byte workspace and checksum. Load
 validates the complete image and structural bounds before its first workspace
 write. This compact persistence format is intentionally distinct from RKSI,

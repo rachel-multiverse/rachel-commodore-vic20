@@ -28,6 +28,10 @@ C/PB0 for RX.
 6. Play online using keyboard, then joystick: move, select, nominate an Ace suit,
    play and draw. Check that held directions do not repeat uncontrollably.
 7. Confirm each short sound cue without missed network messages.
+7a. Note how the online game behaves over a sustained match: the emulator
+    discards 37-74 inbound frames per game to CRC failure and the protocol
+    absorbs it, but the real link's rate is unknown. Frequent
+    `MOVE REJECTED-RETRY` would suggest it is materially worse.
 8. Complete a solo game at two seats and again at eight, verifying finish
    position, spectator state, final card-holder and turn count.
 9. Join an eight-player match and verify all player counts and the current
