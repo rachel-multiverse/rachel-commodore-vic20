@@ -19,11 +19,13 @@ def main() -> None:
     labels = (ROOT / "build/solo-kernel-spike.lbl").read_text()
     names = [
         "solo_fixture_result", "solo_fixture_stage", "solo_apply_fixture_stage",
-        "solo_action_count",
+        "solo_new_game_fixture_stage", "solo_action_count",
+        "solo_rng_fixture_stage",
         "solo_action_kind", "solo_action_rank", "solo_action_suit_mask",
         "solo_action_nomination", "solo_group_mask", "solo_valid_mask",
         "solo_scan_rank", "solo_debug_hand0", "solo_debug_hand1",
-        "solo_debug_hand4", "solo_debug_hand5",
+        "solo_debug_hand4", "solo_debug_hand5", "solo_debug_top",
+        "solo_debug_deck0", "solo_debug_seed",
     ]
     addresses = {}
     for name in names:
@@ -36,8 +38,11 @@ def main() -> None:
     session.write_text(json.dumps([
         {"action": "run_frames", "frames": 4000},
         *(
-            {"action": "memory_read", "addr": item, "len": 1}
-            for item in addresses.values()
+            {
+                "action": "memory_read", "addr": item,
+                "len": 1,
+            }
+            for name, item in addresses.items()
         ),
     ], indent=2) + "\n")
     result = subprocess.run([
@@ -48,7 +53,7 @@ def main() -> None:
     report = json.loads(result.stdout)
     reads = [item for item in report["observations"] if item["kind"] == "memory_read"]
     if len(reads) != len(addresses) or reads[0]["bytes"] != [0xA5]:
-        debug = dict(zip(addresses, (item["bytes"][0] for item in reads)))
+        debug = dict(zip(addresses, (item["bytes"] for item in reads)))
         raise SystemExit(f"solo fixture validation failed: {debug}")
     print(f"Executable compact solo fixture passed at ${address:04X}")
 

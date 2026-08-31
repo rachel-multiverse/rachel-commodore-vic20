@@ -37,6 +37,14 @@ basic_end:
         jsr solo_apply_fixture_validate
         bcs skt_fail
         jsr solo_draw_fixture_validate
+        bcs skt_fail
+        jsr solo_rng_fixture_validate
+        bcs skt_fail
+        jsr solo_recycle_fixture_validate
+        bcs skt_fail
+        jsr solo_new_game_fixture_validate
+        bcs skt_fail
+        jsr solo_persistence_fixture_validate
         bcc skt_ok
 skt_fail:
         lda #$ff

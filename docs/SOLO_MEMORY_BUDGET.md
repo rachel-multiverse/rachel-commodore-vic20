@@ -18,17 +18,17 @@ The 8K expansion exposes `$1200-$3FFF`; CODE occupies `$1210-$3FFF`:
 | Item | Bytes |
 |---|---:|
 | Linker CODE capacity | 11,760 |
-| Current production CODE payload | 6,771 |
-| Current unused CODE | 4,989 |
+| Current production CODE payload | 7,863 |
+| Current unused CODE | 3,897 |
 | Required contingency | 2,048 |
 | First-playable CODE ceiling | 9,712 |
-| Remaining first-slice implementation allowance | 2,941 |
+| Remaining first-slice implementation allowance | 1,849 |
 
 `tests/check_memory_budget.py` reads the fresh ld65 map, emits
 `build/memory-budget.json`, and fails once production CODE crosses 9,712 bytes.
 CI retains the JSON as an artifact.
 
-The current production PRG is 6,788 bytes including its load address, BASIC
+The current production PRG is 7,880 bytes including its load address, BASIC
 trampoline and padding. The test-only fixture harness adds executable catalogue,
 rejection, play and packed-deck draw assertions; its
 fixture and validation code are excluded from production.
@@ -82,9 +82,21 @@ counter rules and nominated-suit legality share the same enumerator.
 `APPLY_ACTION` now validates an indexed action before the first workspace
 write, then applies canonical card order, nomination, draw/skip attacks, red
 and black Jacks, reversals, finish marking and two-player turn advancement.
-Packed-deck draws execute directly on the 6-bit stream. Empty-deck discard
-reconstruction remains the next transition checkpoint; until it lands, a draw
-stops when the packed deck is empty rather than claiming full conformance.
+Packed-deck draws execute directly on the 6-bit stream. The same packed area
+stores the live deck followed by buried discards, preserving chronological
+discard order without another buffer. Exhaustion shuffles that exact trailing
+sequence with the canonical PRNG and retains the current top card.
+
+`NEW_GAME` implements canonical xorshift64, modulo reduction and Fisher-Yates
+over the packed deck. The executable seed-42 vector matches both hands, the top
+discard, first remaining card and final 64-bit RNG state from RachelEngine.
+
+`SAVE_STATE` and `LOAD_STATE` use a deterministic 87-byte `RKS2` image: magic,
+format version, payload length, the exact 80-byte workspace and checksum. Load
+validates the complete image and structural bounds before its first workspace
+write. This compact persistence format is intentionally distinct from RKSI,
+whose general host representation does not describe the packed deck/discard
+boundary needed by this profile.
 
 ## Planned first-slice code budget
 
@@ -105,6 +117,12 @@ The indexed-action and application checkpoints have consumed 1,174 of the
 1,600-byte legality/action ceiling. Their executable catalogue tests are intentionally exhaustive rather
 than timing representative; the playable UI will cache a count and request
 only the selected indexed action.
+
+The packed PRNG, shuffle, deal and exact discard recycling consumed 876 of
+their 900-byte ceiling. Compact persistence adds 216 bytes outside the original
+first-playable estimate. The remaining planned mode, AI and UI ceilings total
+1,110 bytes, leaving 739 bytes of additional headroom before the separately
+protected 2 KiB contingency.
 
 ## Executable fixture evidence
 

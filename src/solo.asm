@@ -30,6 +30,7 @@ SW_HAND_MASKS      = 62
 SOLO_ACTION_PLAY   = 0
 SOLO_ACTION_DRAW   = 1
 SOLO_NO_SUIT       = $ff
+SOLO_SAVE_BYTES    = 87
 
 ; Return A = number of legal actions. The catalogue order is the portable ABI
 ; order: rank, suit bitmask, nomination; DRAW follows every play. No action
@@ -47,6 +48,135 @@ sgac_loop:
         bne sgac_loop
 sgac_done:
         lda solo_action_count
+        rts
+
+; Compact persistence image at ZP_PTR1: "RKS2", version, payload length,
+; 80-byte workspace and XOR checksum. The caller owns the external buffer.
+solo_save_state:
+        ldy #0
+        lda #'R'
+        sta (ZP_PTR1),y
+        iny
+        lda #'K'
+        sta (ZP_PTR1),y
+        iny
+        lda #'S'
+        sta (ZP_PTR1),y
+        iny
+        lda #'2'
+        sta (ZP_PTR1),y
+        iny
+        lda #1
+        sta (ZP_PTR1),y
+        iny
+        lda #SOLO_WS_SIZE
+        sta (ZP_PTR1),y
+        lda #0
+        sta solo_save_checksum
+        ldx #0
+        ldy #6
+sss_copy:
+        lda solo_workspace,x
+        sta (ZP_PTR1),y
+        eor solo_save_checksum
+        sta solo_save_checksum
+        inx
+        iny
+        cpx #SOLO_WS_SIZE
+        bcc sss_copy
+        lda solo_save_checksum
+        sta (ZP_PTR1),y
+        rts
+
+; Load only after the entire image, checksum and structural bounds validate.
+; C=1 rejects without touching the live workspace.
+solo_load_state:
+        ldy #0
+        lda (ZP_PTR1),y
+        cmp #'R'
+        bne sls_bad_early
+        iny
+        lda (ZP_PTR1),y
+        cmp #'K'
+        bne sls_bad_early
+        iny
+        lda (ZP_PTR1),y
+        cmp #'S'
+        beq sls_magic_s
+sls_bad_early:
+        jmp sls_bad
+sls_magic_s:
+        iny
+        lda (ZP_PTR1),y
+        cmp #'2'
+        bne sls_bad
+        iny
+        lda (ZP_PTR1),y
+        cmp #1
+        bne sls_bad
+        iny
+        lda (ZP_PTR1),y
+        cmp #SOLO_WS_SIZE
+        bne sls_bad
+        lda #0
+        sta solo_save_checksum
+        ldx #0
+        ldy #6
+sls_checksum:
+        lda (ZP_PTR1),y
+        eor solo_save_checksum
+        sta solo_save_checksum
+        inx
+        iny
+        cpx #SOLO_WS_SIZE
+        bcc sls_checksum
+        lda (ZP_PTR1),y
+        cmp solo_save_checksum
+        bne sls_bad
+
+        ; Structural checks are sufficient for safe compact-kernel indexing.
+        ldy #6+SW_LAYOUT_VERSION
+        lda (ZP_PTR1),y
+        cmp #1
+        bne sls_bad
+        ldy #6+SW_PLAYER_COUNT
+        lda (ZP_PTR1),y
+        cmp #2
+        bne sls_bad
+        ldy #6+SW_CURRENT_PLAYER
+        lda (ZP_PTR1),y
+        cmp #2
+        bcs sls_bad
+        ldy #6+SW_DECK_COUNT
+        lda (ZP_PTR1),y
+        cmp #53
+        bcs sls_bad
+        sta solo_load_total
+        ldy #6+SW_DISCARD_COUNT
+        lda (ZP_PTR1),y
+        beq sls_bad
+        cmp #53
+        bcs sls_bad
+        clc
+        adc solo_load_total
+        sec
+        sbc #1
+        cmp #53
+        bcs sls_bad
+
+        ldx #0
+        ldy #6
+sls_copy:
+        lda (ZP_PTR1),y
+        sta solo_workspace,x
+        inx
+        iny
+        cpx #SOLO_WS_SIZE
+        bcc sls_copy
+        clc
+        rts
+sls_bad:
+        sec
         rts
 
 ; Input A = zero-based action index. C=0 and the solo_action_* fields describe
@@ -134,6 +264,7 @@ saa_reject:
 
 solo_apply_play:
         jsr solo_find_action_leader
+        jsr solo_archive_played_cards
         ; Remove every selected suit from the acting player's hand.
         ldx #0
 sap_remove:
@@ -213,7 +344,11 @@ sap_top:
         asl
         ora solo_action_rank
         sta solo_workspace+SW_TOP_DISCARD
-        inc solo_workspace+SW_DISCARD_COUNT
+        lda solo_action_suit_mask
+        jsr solo_popcount4
+        clc
+        adc solo_workspace+SW_DISCARD_COUNT
+        sta solo_workspace+SW_DISCARD_COUNT
         jsr solo_mark_out_if_empty
         jsr solo_advance_turn
         rts
@@ -266,7 +401,11 @@ sad_count:
         sta solo_draw_remaining
 sad_loop:
         lda solo_workspace+SW_DECK_COUNT
+        bne sad_pop
+        jsr solo_recycle_discards
+        lda solo_workspace+SW_DECK_COUNT
         beq sad_done
+sad_pop:
         jsr solo_deck_pop
         jsr solo_hand_set_ordinal
         dec solo_draw_remaining
@@ -275,6 +414,466 @@ sad_done:
         lda #0
         sta solo_workspace+SW_PENDING_DRAWS
         jsr solo_advance_turn
+        rts
+
+; Preserve the complete discard order in the packed area after the live deck.
+; Append the old top, then every played card except the new (last) top.
+solo_archive_played_cards:
+        lda solo_workspace+SW_DECK_COUNT
+        clc
+        adc solo_workspace+SW_DISCARD_COUNT
+        sec
+        sbc #1
+        sta solo_archive_index
+        lda solo_workspace+SW_TOP_DISCARD
+        jsr solo_card_to_ordinal
+        jsr solo_archive_ordinal
+        ldx solo_effect_leader
+        jsr solo_archive_suit_unless_last
+        ldx #0
+sapc_rest:
+        cpx solo_effect_leader
+        beq sapc_next
+        lda solo_bit_table,x
+        and solo_action_suit_mask
+        beq sapc_next
+        jsr solo_archive_suit_unless_last
+sapc_next:
+        inx
+        cpx #4
+        bcc sapc_rest
+        rts
+
+solo_archive_suit_unless_last:
+        stx solo_scan_suit
+        jsr solo_last_action_suit
+        cmp solo_scan_suit
+        beq sasu_done
+        lda solo_scan_suit
+        asl
+        asl
+        asl
+        clc
+        adc solo_scan_suit
+        adc solo_scan_suit
+        adc solo_scan_suit
+        adc solo_scan_suit
+        adc solo_scan_suit       ; suit * 13
+        clc
+        adc solo_action_rank
+        sec
+        sbc #2
+        jsr solo_archive_ordinal
+sasu_done:
+        ldx solo_scan_suit
+        rts
+
+solo_archive_ordinal:
+        ldx solo_archive_index
+        jsr solo_deck_set_at
+        inc solo_archive_index
+        rts
+
+; When the draw boundary reaches zero, the packed prefix is exactly the buried
+; discard pile in chronological order. Shuffle it and retain only the top.
+solo_recycle_discards:
+        lda solo_workspace+SW_DISCARD_COUNT
+        cmp #2
+        bcc srd_done
+        sec
+        sbc #1
+        sta solo_workspace+SW_DECK_COUNT
+        sta solo_shuffle_count
+        lda #1
+        sta solo_workspace+SW_DISCARD_COUNT
+        lda solo_shuffle_count
+        cmp #2
+        bcc srd_done
+        sec
+        sbc #1
+        sta solo_shuffle_index
+srd_shuffle:
+        jsr solo_rng_next
+        lda solo_shuffle_index
+        clc
+        adc #1
+        jsr solo_rng_mod
+        sta solo_swap_index
+        ldx solo_shuffle_index
+        jsr solo_deck_get_at
+        sta solo_swap_card
+        ldx solo_swap_index
+        jsr solo_deck_get_at
+        pha
+        ldx solo_shuffle_index
+        pla
+        jsr solo_deck_set_at
+        lda solo_swap_card
+        ldx solo_swap_index
+        jsr solo_deck_set_at
+        dec solo_shuffle_index
+        bne srd_shuffle
+srd_done:
+        rts
+
+; A=RUBP card encoding -> A=ordinal.
+solo_card_to_ordinal:
+        pha
+        and #$3f
+        sec
+        sbc #2
+        sta solo_pack_temp
+        pla
+        lsr
+        lsr
+        lsr
+        lsr
+        lsr
+        lsr
+        sta solo_scan_suit
+        asl
+        asl
+        asl
+        clc
+        adc solo_scan_suit
+        adc solo_scan_suit
+        adc solo_scan_suit
+        adc solo_scan_suit
+        adc solo_scan_suit
+        clc
+        adc solo_pack_temp
+        rts
+
+; Create the canonical two-player game using the 64-bit seed already stored in
+; SW_RANDOM_SEED. Zero is normalised to $00000000DEADBEEF like RachelEngine.
+solo_new_game:
+        ldx #7
+sng_save_seed:
+        lda solo_workspace+SW_RANDOM_SEED,x
+        sta solo_scratch,x
+        dex
+        bpl sng_save_seed
+        lda #0
+        ldx #0
+sng_clear:
+        sta solo_workspace,x
+        inx
+        cpx #SOLO_WS_SIZE
+        bne sng_clear
+        ldx #7
+sng_restore_seed:
+        lda solo_scratch,x
+        sta solo_workspace+SW_RANDOM_SEED,x
+        dex
+        bpl sng_restore_seed
+        lda #1
+        sta solo_workspace+SW_LAYOUT_VERSION
+        lda #2
+        sta solo_workspace+SW_PLAYER_COUNT
+        jsr solo_seed_normalize
+
+        ; Packed standard deck: ordinals 0...51.
+        lda #52
+        sta solo_workspace+SW_DECK_COUNT
+        lda #0
+        sta solo_deck_index
+sng_deck:
+        lda solo_deck_index
+        ldx solo_deck_index
+        jsr solo_deck_set_at
+        inc solo_deck_index
+        lda solo_deck_index
+        cmp #52
+        bcc sng_deck
+
+        ; Canonical Fisher-Yates, consuming one xorshift64 output per swap.
+        lda #51
+        sta solo_shuffle_index
+sng_shuffle:
+        jsr solo_rng_next
+        lda solo_shuffle_index
+        clc
+        adc #1
+        jsr solo_rng_mod
+        sta solo_swap_index
+        ldx solo_shuffle_index
+        jsr solo_deck_get_at
+        sta solo_swap_card
+        ldx solo_swap_index
+        jsr solo_deck_get_at
+        pha
+        ldx solo_shuffle_index
+        pla
+        jsr solo_deck_set_at
+        lda solo_swap_card
+        ldx solo_swap_index
+        jsr solo_deck_set_at
+        dec solo_shuffle_index
+        bne sng_shuffle
+
+        ; RachelEngine deals seven consecutive cards to each player.
+        lda #0
+        sta solo_workspace+SW_CURRENT_PLAYER
+        lda #7
+        sta solo_deal_remaining
+sng_deal0:
+        jsr solo_deck_pop
+        jsr solo_hand_set_ordinal
+        dec solo_deal_remaining
+        bne sng_deal0
+        lda #1
+        sta solo_workspace+SW_CURRENT_PLAYER
+        lda #7
+        sta solo_deal_remaining
+sng_deal1:
+        jsr solo_deck_pop
+        jsr solo_hand_set_ordinal
+        dec solo_deal_remaining
+        bne sng_deal1
+        jsr solo_deck_pop
+        jsr solo_ordinal_to_card
+        sta solo_workspace+SW_TOP_DISCARD
+        lda #1
+        sta solo_workspace+SW_DISCARD_COUNT
+        lda #0
+        sta solo_workspace+SW_CURRENT_PLAYER
+        rts
+
+solo_seed_normalize:
+        lda #0
+        ldx #7
+ssn_check:
+        ora solo_workspace+SW_RANDOM_SEED,x
+        dex
+        bpl ssn_check
+        bne ssn_done
+        lda #$ef
+        sta solo_workspace+SW_RANDOM_SEED
+        lda #$be
+        sta solo_workspace+SW_RANDOM_SEED+1
+        lda #$ad
+        sta solo_workspace+SW_RANDOM_SEED+2
+        lda #$de
+        sta solo_workspace+SW_RANDOM_SEED+3
+ssn_done:
+        rts
+
+; xorshift64: x ^= x<<13; x ^= x>>7; x ^= x<<17. State is LE.
+solo_rng_next:
+        lda #13
+        jsr solo_rng_shift_left
+        lda #7
+        jsr solo_rng_shift_right
+        lda #17
+        jsr solo_rng_shift_left
+        rts
+
+; A=bit count. Copy state to scratch, shift, then XOR it into state.
+solo_rng_shift_left:
+        tay
+        jsr solo_rng_copy_scratch
+srsl_bits:
+        clc
+        lda solo_scratch
+        rol
+        sta solo_scratch
+        lda solo_scratch+1
+        rol
+        sta solo_scratch+1
+        lda solo_scratch+2
+        rol
+        sta solo_scratch+2
+        lda solo_scratch+3
+        rol
+        sta solo_scratch+3
+        lda solo_scratch+4
+        rol
+        sta solo_scratch+4
+        lda solo_scratch+5
+        rol
+        sta solo_scratch+5
+        lda solo_scratch+6
+        rol
+        sta solo_scratch+6
+        lda solo_scratch+7
+        rol
+        sta solo_scratch+7
+        dey
+        bne srsl_bits
+        jmp solo_rng_xor_scratch
+
+solo_rng_shift_right:
+        tay
+        jsr solo_rng_copy_scratch
+srsr_bits:
+        clc
+        ldx #7
+srsr_bytes:
+        lda solo_scratch,x
+        ror
+        sta solo_scratch,x
+        dex
+        bpl srsr_bytes
+        dey
+        bne srsr_bits
+        jmp solo_rng_xor_scratch
+
+solo_rng_copy_scratch:
+        ldx #7
+srcs_loop:
+        lda solo_workspace+SW_RANDOM_SEED,x
+        sta solo_scratch,x
+        dex
+        bpl srcs_loop
+        rts
+
+solo_rng_xor_scratch:
+        ldx #7
+srxs_loop:
+        lda solo_workspace+SW_RANDOM_SEED,x
+        eor solo_scratch,x
+        sta solo_workspace+SW_RANDOM_SEED,x
+        dex
+        bpl srxs_loop
+        rts
+
+; A=divisor (2...52), return A=64-bit state modulo divisor.
+solo_rng_mod:
+        sta solo_mod_divisor
+        lda #0
+        sta solo_mod_remainder
+        ldx #7
+srm_byte:
+        lda solo_workspace+SW_RANDOM_SEED,x
+        sta solo_mod_source
+        ldy #8
+srm_bit:
+        asl solo_mod_source
+        rol solo_mod_remainder
+        lda solo_mod_remainder
+        cmp solo_mod_divisor
+        bcc srm_next
+        sec
+        sbc solo_mod_divisor
+        sta solo_mod_remainder
+srm_next:
+        dey
+        bne srm_bit
+        dex
+        bpl srm_byte
+        lda solo_mod_remainder
+        rts
+
+; X=index, return A=6-bit ordinal.
+solo_deck_get_at:
+        jsr solo_deck_bit_address
+        lda #0
+        sta solo_pack_value
+        lda #1
+        sta solo_value_mask
+        ldx #6
+sdga_bit:
+        lda solo_workspace+SW_PACKED_DECK,y
+        and solo_deck_mask
+        beq sdga_next
+        lda solo_pack_value
+        ora solo_value_mask
+        sta solo_pack_value
+sdga_next:
+        asl solo_value_mask
+        asl solo_deck_mask
+        bne sdga_same_byte
+        lda #1
+        sta solo_deck_mask
+        iny
+sdga_same_byte:
+        dex
+        bne sdga_bit
+        lda solo_pack_value
+        rts
+
+; X=index, A=6-bit ordinal.
+solo_deck_set_at:
+        sta solo_pack_value
+        jsr solo_deck_bit_address
+        ldx #6
+sdsa_bit:
+        lda solo_deck_mask
+        eor #$ff
+        and solo_workspace+SW_PACKED_DECK,y
+        sta solo_pack_temp
+        lsr solo_pack_value
+        bcc sdsa_store
+        lda solo_pack_temp
+        ora solo_deck_mask
+        sta solo_pack_temp
+sdsa_store:
+        lda solo_pack_temp
+        sta solo_workspace+SW_PACKED_DECK,y
+        asl solo_deck_mask
+        bne sdsa_same_byte
+        lda #1
+        sta solo_deck_mask
+        iny
+sdsa_same_byte:
+        dex
+        bne sdsa_bit
+        rts
+
+; X=index -> Y=packed byte, deck_mask=first bit.
+solo_deck_bit_address:
+        txa
+        asl
+        sta solo_bit_position
+        asl
+        clc
+        adc solo_bit_position     ; index * 6, 16-bit
+        sta solo_bit_position
+        lda #0
+        adc #0
+        sta solo_bit_position+1
+        lda solo_bit_position
+        and #7
+        tax
+        lda solo_bit_table,x
+        sta solo_deck_mask
+        lda solo_bit_position
+        lsr
+        lsr
+        lsr
+        sta solo_pack_byte
+        lda solo_bit_position+1
+        asl
+        asl
+        asl
+        asl
+        asl
+        ora solo_pack_byte
+        tay
+        rts
+
+; A=ordinal -> A=RUBP card encoding.
+solo_ordinal_to_card:
+        ldx #0
+sotc_suit:
+        cmp #13
+        bcc sotc_rank
+        sec
+        sbc #13
+        inx
+        bne sotc_suit
+sotc_rank:
+        clc
+        adc #2
+        sta solo_pack_temp
+        txa
+        asl
+        asl
+        asl
+        asl
+        asl
+        asl
+        ora solo_pack_temp
         rts
 
 ; Return A=front 6-bit ordinal and remove it from the LSB-first packed deck.
@@ -731,17 +1330,40 @@ solo_draw_remaining:    .byte 0
 solo_drawn_ordinal:     .byte 0
 solo_pack_temp:         .byte 0
 solo_last_suit:         .byte 0
+solo_deck_index:        .byte 0
+solo_shuffle_index:     .byte 0
+solo_swap_index:        .byte 0
+solo_swap_card:         .byte 0
+solo_deal_remaining:    .byte 0
+solo_mod_divisor:       .byte 0
+solo_mod_remainder:     .byte 0
+solo_mod_source:        .byte 0
+solo_pack_value:        .byte 0
+solo_value_mask:        .byte 0
+solo_deck_mask:         .byte 0
+solo_bit_position:      .word 0
+solo_pack_byte:         .byte 0
+solo_archive_index:     .byte 0
+solo_shuffle_count:     .byte 0
+solo_save_checksum:     .byte 0
+solo_load_total:        .byte 0
 
 .ifdef SOLO_KERNEL_TEST
 .export solo_fixture_result, solo_fixture_stage, solo_apply_fixture_stage
+.export solo_new_game_fixture_stage
+.export solo_rng_fixture_stage
 .export solo_action_count, solo_action_kind
 .export solo_action_rank, solo_action_suit_mask, solo_action_nomination
 .export solo_group_mask, solo_valid_mask, solo_scan_rank
 .export solo_debug_hand0, solo_debug_hand1, solo_debug_hand4, solo_debug_hand5
+.export solo_debug_top, solo_debug_deck0, solo_debug_seed
 solo_debug_hand0 = solo_workspace+SW_HAND_MASKS
 solo_debug_hand1 = solo_workspace+SW_HAND_MASKS+1
 solo_debug_hand4 = solo_workspace+SW_HAND_MASKS+4
 solo_debug_hand5 = solo_workspace+SW_HAND_MASKS+5
+solo_debug_top = solo_workspace+SW_TOP_DISCARD
+solo_debug_deck0 = solo_workspace+SW_PACKED_DECK
+solo_debug_seed = solo_workspace+SW_RANDOM_SEED
 ; Load the frozen fixture into the real overlay. The fixture is the compact
 ; representation of the canonical RKSI state checked by tests/solo_kernel.py.
 solo_fixture_load:
@@ -908,6 +1530,17 @@ solo_apply_fixture_validate:
         lda solo_workspace+SW_HAND_MASKS+5
         cmp #$40                  ; nine spades remains
         bne safv_bad
+        lda solo_workspace+SW_DISCARD_COUNT
+        cmp #3
+        bne safv_bad
+        ldx #0
+        jsr solo_deck_get_at
+        cmp #3                    ; former five hearts top
+        bne safv_bad
+        ldx #1
+        jsr solo_deck_get_at
+        cmp #7                    ; intermediate nine hearts
+        bne safv_bad
         clc
         rts
 safv_bad:
@@ -967,6 +1600,218 @@ sdfv_bad:
         sec
         rts
 
+solo_new_game_fixture_validate:
+        lda #0
+        sta solo_new_game_fixture_stage
+        ldx #0
+sngfv_clear:
+        sta solo_workspace,x
+        inx
+        cpx #SOLO_WS_SIZE
+        bne sngfv_clear
+        lda #42
+        sta solo_workspace+SW_RANDOM_SEED
+        jsr solo_new_game
+        lda solo_workspace+SW_DECK_COUNT
+        cmp #37
+        bne sngfv_bad
+        inc solo_new_game_fixture_stage
+        lda solo_workspace+SW_DISCARD_COUNT
+        cmp #1
+        bne sngfv_bad
+        inc solo_new_game_fixture_stage
+        lda solo_workspace+SW_TOP_DISCARD
+        cmp #$cc                  ; queen spades
+        bne sngfv_bad
+        inc solo_new_game_fixture_stage
+        lda solo_workspace+SW_PACKED_DECK
+        and #$3f
+        cmp #15                   ; four diamonds is first remaining card
+        bne sngfv_bad
+        inc solo_new_game_fixture_stage
+        lda solo_workspace+SW_HAND_MASKS+2
+        cmp #$30
+        bne sngfv_bad
+        lda solo_workspace+SW_HAND_MASKS+3
+        cmp #$08
+        bne sngfv_bad
+        lda solo_workspace+SW_HAND_MASKS+4
+        cmp #$04
+        bne sngfv_bad
+        lda solo_workspace+SW_HAND_MASKS+5
+        cmp #$52
+        bne sngfv_bad
+        lda solo_workspace+SW_HAND_MASKS+7
+        cmp #$20
+        bne sngfv_bad
+        lda solo_workspace+SW_HAND_MASKS+8
+        cmp #$7c
+        bne sngfv_bad
+        lda solo_workspace+SW_HAND_MASKS+10
+        cmp #$20
+        bne sngfv_bad
+        ldx #7
+sngfv_seed:
+        lda solo_workspace+SW_RANDOM_SEED,x
+        cmp solo_seed42_final,x
+        bne sngfv_bad
+        dex
+        bpl sngfv_seed
+        clc
+        rts
+sngfv_bad:
+        sec
+        rts
+
+solo_seed42_final:
+        .byte $e3,$e3,$25,$26,$72,$85,$8c,$06
+
+solo_rng_fixture_validate:
+        lda #0
+        sta solo_rng_fixture_stage
+        ldx #7
+srfv_clear:
+        sta solo_workspace+SW_RANDOM_SEED,x
+        dex
+        bpl srfv_clear
+        lda #42
+        sta solo_workspace+SW_RANDOM_SEED
+        inc solo_rng_fixture_stage
+        jsr solo_rng_next
+        inc solo_rng_fixture_stage
+        ldx #7
+srfv_compare:
+        lda solo_workspace+SW_RANDOM_SEED,x
+        cmp solo_seed42_first,x
+        bne srfv_bad
+        dex
+        bpl srfv_compare
+        clc
+        rts
+srfv_bad:
+        sec
+        rts
+
+solo_seed42_first:
+        .byte $aa,$4a,$51,$95,$0a,0,0,0
+
+solo_recycle_fixture_validate:
+        lda #0
+        ldx #0
+srv_clear:
+        sta solo_workspace,x
+        inx
+        cpx #SOLO_WS_SIZE
+        bne srv_clear
+        lda #1
+        sta solo_workspace+SW_LAYOUT_VERSION
+        lda #2
+        sta solo_workspace+SW_PLAYER_COUNT
+        lda #4
+        sta solo_workspace+SW_DISCARD_COUNT
+        lda #5
+        sta solo_workspace+SW_TOP_DISCARD
+        lda #42
+        sta solo_workspace+SW_RANDOM_SEED
+        lda #0
+        ldx #0
+        jsr solo_deck_set_at
+        lda #1
+        ldx #1
+        jsr solo_deck_set_at
+        lda #2
+        ldx #2
+        jsr solo_deck_set_at
+        jsr solo_recycle_discards
+        lda solo_workspace+SW_DECK_COUNT
+        cmp #3
+        bne srv_bad
+        lda solo_workspace+SW_DISCARD_COUNT
+        cmp #1
+        bne srv_bad
+        ldx #0
+        jsr solo_deck_get_at
+        cmp #0
+        bne srv_bad
+        ldx #1
+        jsr solo_deck_get_at
+        cmp #2
+        bne srv_bad
+        ldx #2
+        jsr solo_deck_get_at
+        cmp #1
+        bne srv_bad
+        ldx #7
+srv_seed:
+        lda solo_workspace+SW_RANDOM_SEED,x
+        cmp solo_seed42_recycled,x
+        bne srv_bad
+        dex
+        bpl srv_seed
+        clc
+        rts
+srv_bad:
+        sec
+        rts
+
+solo_seed42_recycled:
+        .byte $bf,$02,$02,$f8,$fd,$aa,$0a,$a0
+
+solo_persistence_fixture_validate:
+        lda #<solo_save_fixture_a
+        sta ZP_PTR1
+        lda #>solo_save_fixture_a
+        sta ZP_PTR1+1
+        jsr solo_save_state
+        lda #0
+        ldx #0
+spfv_clear:
+        sta solo_workspace,x
+        inx
+        cpx #SOLO_WS_SIZE
+        bne spfv_clear
+        jsr solo_load_state
+        bcs spfv_bad
+        lda #<solo_save_fixture_b
+        sta ZP_PTR1
+        lda #>solo_save_fixture_b
+        sta ZP_PTR1+1
+        jsr solo_save_state
+        ldx #0
+spfv_compare:
+        lda solo_save_fixture_a,x
+        cmp solo_save_fixture_b,x
+        bne spfv_bad
+        inx
+        cpx #SOLO_SAVE_BYTES
+        bcc spfv_compare
+
+        ; Corruption is rejected before any workspace byte changes.
+        lda solo_save_fixture_a+SOLO_SAVE_BYTES-1
+        eor #1
+        sta solo_save_fixture_a+SOLO_SAVE_BYTES-1
+        lda #1
+        sta solo_workspace+SW_CURRENT_PLAYER
+        lda #<solo_save_fixture_a
+        sta ZP_PTR1
+        lda #>solo_save_fixture_a
+        sta ZP_PTR1+1
+        jsr solo_load_state
+        bcc spfv_bad
+        lda solo_workspace+SW_CURRENT_PLAYER
+        cmp #1
+        bne spfv_bad
+        clc
+        rts
+spfv_bad:
+        sec
+        rts
+
+solo_save_fixture_a:
+        .res SOLO_SAVE_BYTES,0
+solo_save_fixture_b:
+        .res SOLO_SAVE_BYTES,0
+
 ; LSB-first 6-bit deck ordinals: ace hearts (12), two spades (39).
 ; Hands: five hearts; three clubs plus jack spades.
 solo_workspace_fixture:
@@ -988,5 +1833,9 @@ solo_fixture_result:
 solo_fixture_stage:
         .byte 0
 solo_apply_fixture_stage:
+        .byte 0
+solo_new_game_fixture_stage:
+        .byte 0
+solo_rng_fixture_stage:
         .byte 0
 .endif

@@ -31,6 +31,11 @@ def main() -> None:
     assert "solo_apply_action:" in source
     assert "Validation completes before the first workspace write" in source
     assert "solo_deck_pop:" in source
+    assert "solo_new_game:" in source
+    assert "solo_recycle_discards:" in source
+    assert "solo_save_state:" in source
+    assert "solo_load_state:" in source
+    assert "Load only after the entire image" in source
     assert '.assert solo_workspace_fixture_end-solo_workspace_fixture = SOLO_WS_SIZE' in source
     assert re.search(r"\.byte \$cc,\$09\s+; two packed 6-bit ordinals", source)
     print("Compact two-player fixture and 80+16-byte overlay are consistent")
