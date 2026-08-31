@@ -17,7 +17,7 @@ SOLO_SPIKE_OBJECT = $(BUILD_DIR)/main-solo-kernel-spike.o
 # VIC-20 with 8KB expansion config
 CONFIG = vic20-8k.cfg
 
-.PHONY: all test solo-kernel-spike solo-kernel-e2e e2e-prg e2e-full-game e2e-eight-player e2e-reconnect capture-video release clean
+.PHONY: all test solo-kernel-spike solo-kernel-e2e e2e-prg e2e-full-game e2e-full-game-ntsc e2e-eight-player e2e-reconnect capture-video release clean
 
 all: $(BUILD_DIR) $(TARGET)
 	@echo "Built: $(TARGET)"
@@ -51,6 +51,10 @@ $(SOLO_SPIKE_TARGET): $(SOLO_SPIKE_OBJECT) $(CONFIG)
 e2e-prg: $(BUILD_DIR) $(E2E_TARGET)
 
 e2e-full-game: e2e-prg
+	python3 tests/full_game_e2e.py
+
+e2e-full-game-ntsc: e2e-prg
+	RACHEL_E2E_REGION=ntsc RACHEL_E2E_OUTPUT=e2e-output-ntsc \
 	python3 tests/full_game_e2e.py
 
 e2e-eight-player: e2e-prg

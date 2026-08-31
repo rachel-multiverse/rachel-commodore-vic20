@@ -23,6 +23,7 @@ AI_PLAYERS = int(os.environ.get("RACHEL_E2E_AI_PLAYERS", "1"))
 GAME_FRAMES = int(os.environ.get("RACHEL_E2E_GAME_FRAMES", "120000"))
 DROP_AFTER = int(os.environ.get("RACHEL_E2E_DROP_AFTER_SERVER_FRAMES", "0"))
 WRITE_INTERVAL = os.environ.get("RACHEL_E2E_WRITE_INTERVAL", "300ms")
+REGION = os.environ.get("RACHEL_E2E_REGION", "pal").lower()
 
 
 class DropOnceProxy:
@@ -109,6 +110,8 @@ def require_environment() -> None:
         missing.append("EMU198X_DIR (with a release VIC-20 runner)")
     if missing:
         raise SystemExit("missing " + ", ".join(missing))
+    if REGION not in {"pal", "ntsc"}:
+        raise SystemExit("RACHEL_E2E_REGION must be pal or ntsc")
 
 
 def wait_for_server(process: subprocess.Popen[str], port: int = 6502) -> None:
@@ -171,7 +174,8 @@ def main() -> None:
             if proxy:
                 proxy.start()
             result = subprocess.run([
-                str(EMU_BIN), "--headless", "--ram-expansion-kb", "11",
+                str(EMU_BIN), "--headless", "--region", REGION,
+                "--ram-expansion-kb", "11",
                 "--prg", str(sys_prg), "--prg-sys", "--esp-at-tcp",
                 "--script", str(session_path), "--screenshot", str(screenshot_path),
             ], cwd=EMU, text=True, capture_output=True, timeout=360)

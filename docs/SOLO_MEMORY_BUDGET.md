@@ -18,17 +18,17 @@ The 8K expansion exposes `$1200-$3FFF`; CODE occupies `$1210-$3FFF`:
 | Item | Bytes |
 |---|---:|
 | Linker CODE capacity | 11,760 |
-| Current production CODE payload | 8,675 |
-| Current unused CODE | 3,085 |
+| Current production CODE payload | 8,750 |
+| Current unused CODE | 3,010 |
 | Required contingency | 2,048 |
 | First-playable CODE ceiling | 9,712 |
-| Remaining first-slice implementation allowance | 1,037 |
+| Remaining first-slice implementation allowance | 962 |
 
 `tests/check_memory_budget.py` reads the fresh ld65 map, emits
 `build/memory-budget.json`, and fails once production CODE crosses 9,712 bytes.
 CI retains the JSON as an artifact.
 
-The current production PRG is 8,692 bytes including its load address, BASIC
+The current production PRG is 8,767 bytes including its load address, BASIC
 trampoline and padding. The test-only fixture harness adds executable catalogue,
 rejection, play and packed-deck draw assertions; its
 fixture and validation code are excluded from production.

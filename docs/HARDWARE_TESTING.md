@@ -2,7 +2,7 @@
 
 ## Required setup
 
-- A PAL VIC-20 with at least 8KB RAM expansion
+- A PAL or NTSC VIC-20 with at least 8KB RAM expansion
 - A Sven Petersen-style C64 WiFi modem and its documented VIC-20 user-port
   edge adapter, or an electrically equivalent ESP-AT interface
 - A server reachable on TCP port 6502
@@ -35,6 +35,6 @@ C/PB0 for RX.
 10. Power-cycle and repeat one complete match from a fresh load.
 
 Record VIC model/revision, PAL/NTSC, RAM expansion, modem firmware, adapter,
-server commit, PRG checksum and any observed failure. NTSC serial operation is
-currently experimental and must not be marked supported without a complete
-network match on real NTSC hardware.
+server commit, PRG checksum and any observed failure. Both timing sets complete
+emulated matches, but each video standard must remain experimentally labelled
+until a complete network match passes on corresponding physical hardware.

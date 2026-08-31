@@ -2,7 +2,7 @@
 
 ## Current classification
 
-This build is an **emulator-verified PAL release candidate**. It is feature
+This build is an **emulator-verified PAL/NTSC release candidate**. It is feature
 complete for two-player solo play and online RUBP play in one 8K-expanded PRG.
 It must remain labelled experimental on physical hardware until the checklist
 in `HARDWARE_TESTING.md` is completed on a real unit.
@@ -19,6 +19,9 @@ in `HARDWARE_TESTING.md` is completed on a real unit.
 - A complete solo game reaches a winner without a server.
 - A complete online game reaches the terminal server event through Emu198x's
   cycle-driven user-port ESP-AT bridge and the real Go server.
+- Automatic raster-based region detection selects separate PAL and NTSC
+  software-UART timing tables.
+- Complete online games pass under both PAL and NTSC Emu198x timing models.
 - The title-to-solo game screen is visually captured under PAL emulation.
 - The release ZIP contains the PRG, controls, status and hardware checklist and
   has a SHA-256 sidecar.
@@ -36,16 +39,16 @@ candidate does **not** expose disk save/resume in its UI.
 Doing so safely requires choosing and testing a real storage path (datasette,
 1541-compatible disk, SD2IEC/Ultimate device, or an online-hosted save). KERNAL
 I/O also temporarily owns memory and interrupts that the screen and software
-UART depend upon. With only 1,037 bytes remaining before the conservative
+UART depend upon. With only 962 bytes remaining before the conservative
 feature ceiling, an untestable storage implementation would spend contingency
 and create a misleading compatibility claim. The stable RKS2 format means this
 can be added later without changing saved game semantics.
 
 ## Remaining release blockers
 
-- Complete the physical checklist on a PAL VIC-20 with an 8K expansion.
+- Complete the physical checklist on PAL and NTSC VIC-20s with 8K expansion.
 - Verify the real user-port modem/adapter electrical and serial path.
-- Treat NTSC networking as experimental until its software-UART timing is
-  calibrated and a complete real-hardware match succeeds.
+- Complete the physical checklist separately on an NTSC VIC-20 before calling
+  its now emulator-calibrated network timing hardware-supported.
 
 Everything else is release polish rather than a known gameplay blocker.

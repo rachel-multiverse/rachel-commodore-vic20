@@ -5,7 +5,8 @@ A VIC-20 client for the Rachel card game, written in 6502 assembly.
 ## Requirements
 
 - **Hardware**: VIC-20 with 8KB+ memory expansion
-- **Video standard**: PAL for network play (the software UART is cycle-tuned)
+- **Video standard**: PAL and NTSC are automatically detected; both network
+  timing sets are emulator-verified, with physical verification pending
 - **Networking**: ESP8266/ESP32 WiFi modem connected to user port
 - **Assembler**: cc65 toolchain (ca65, ld65)
 
@@ -80,10 +81,10 @@ Do not connect a bare 3.3V ESP module directly to 5V logic or power. Use the
 documented modem/edge-adapter combination or suitable regulation and level
 translation. See `docs/HARDWARE_TESTING.md` before trying physical hardware.
 
-PAL is the supported physical network target. The display/game code is not
-region-specific, but the bit-banged serial timings have not been calibrated on
-an NTSC unit; NTSC network play is therefore experimental rather than a release
-claim.
+The client observes one VIC-I raster frame at startup and selects independent
+PAL or NTSC software-UART timings. Complete online matches pass under both
+Emu198x regions. Physical PAL and NTSC verification remain release requirements;
+until then the corresponding hardware claims are experimental.
 
 ## Platform ID
 
@@ -123,6 +124,8 @@ Logs and the final screenshot are retained under `build/e2e-output/`. The test
 requires the server to finish and rejects any run containing a client error.
 `make e2e-eight-player` runs the same production path with seven AI opponents
 and retains its independent evidence under `build/e2e-output-8/`.
+`make e2e-full-game-ntsc` runs the same complete match under NTSC timing and
+retains its evidence under `build/e2e-output-ntsc/`.
 `make e2e-reconnect` uses a TCP proxy to sever an active match, requires the Go
 server to report that the original player was reclaimed, and then completes
 the game. It uses 300 ms host frame spacing, slightly above the approximately

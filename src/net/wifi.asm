@@ -19,6 +19,13 @@ RX_SLOW_BIT_DELAY_COUNT = 85
 RX_SLOW_HALF_DELAY_COUNT = 45
 .endif
 
+NTSC_TX_BIT_DELAY_COUNT       = 11
+NTSC_RX_BIT_DELAY_COUNT       = 14
+NTSC_RX_HALF_DELAY_COUNT      = 6
+NTSC_TX_SLOW_DELAY_COUNT      = 75
+NTSC_RX_SLOW_DELAY_COUNT      = 78
+NTSC_RX_SLOW_HALF_DELAY_COUNT = 41
+
 ; Status flags
 NET_CONNECTED   = $01
 NET_ERROR       = $80
@@ -39,11 +46,13 @@ net_init:
         sta net_status
         sta bytes_pending
 
-        lda #13
+        jsr detect_video_standard
+        ldx video_standard
+        lda tx_fast_delay_table,x
         sta tx_bit_delay_count
-        lda #RX_BIT_DELAY_COUNT
+        lda rx_fast_delay_table,x
         sta rx_bit_delay_count
-        lda #RX_HALF_DELAY_COUNT
+        lda rx_fast_half_table,x
         sta rx_half_delay_count
 
         rts
@@ -73,11 +82,12 @@ nc_uart_drain_inner:
         bne nc_uart_drain_inner
         dex
         bne nc_uart_drain_outer
-        lda #82
+        ldx video_standard
+        lda tx_slow_delay_table,x
         sta tx_bit_delay_count
-        lda #RX_SLOW_BIT_DELAY_COUNT
+        lda rx_slow_delay_table,x
         sta rx_bit_delay_count
-        lda #RX_SLOW_HALF_DELAY_COUNT
+        lda rx_slow_half_table,x
         sta rx_half_delay_count
 
         ; Send AT command to connect
@@ -131,6 +141,33 @@ at_uart_2400:
         .byte $32,$34,$30,$30,$2c,$38,$2c,$31,$2c,$30,$2c,$30,13,0
 at_port:
         .byte $22, ",6502", 13, 0
+
+; Observe one VIC-I raster wrap. $9004 exposes scanline/2, reaching about 155
+; on 312-line PAL and 130 on 261-line NTSC. Result: 0 PAL, 1 NTSC. This runs
+; before serial traffic and does not depend on the IRQ-driven jiffy clock.
+detect_video_standard:
+        lda VIC_RASTER
+        sta video_raster_previous
+        sta video_raster_maximum
+dvs_wait:
+        lda VIC_RASTER
+        cmp video_raster_maximum
+        bcc dvs_check_wrap
+        sta video_raster_maximum
+dvs_check_wrap:
+        cmp video_raster_previous
+        bcc dvs_wrapped
+        sta video_raster_previous
+        bcs dvs_wait
+dvs_wrapped:
+        lda #0
+        ldx video_raster_maximum
+        cpx #140
+        bcs dvs_store
+        lda #1
+dvs_store:
+        sta video_standard
+        rts
 
 ; -----------------------------------------------------------------------------
 ; Send IP address (4 octets separated by dots)
@@ -645,3 +682,18 @@ send_error_match:.byte 0
 tx_bit_delay_count: .byte 13
 rx_bit_delay_count: .byte RX_BIT_DELAY_COUNT
 rx_half_delay_count:.byte RX_HALF_DELAY_COUNT
+video_standard:     .byte 0
+video_raster_previous:.byte 0
+video_raster_maximum:.byte 0
+tx_fast_delay_table:
+        .byte 13,NTSC_TX_BIT_DELAY_COUNT
+rx_fast_delay_table:
+        .byte RX_BIT_DELAY_COUNT,NTSC_RX_BIT_DELAY_COUNT
+rx_fast_half_table:
+        .byte RX_HALF_DELAY_COUNT,NTSC_RX_HALF_DELAY_COUNT
+tx_slow_delay_table:
+        .byte 82,NTSC_TX_SLOW_DELAY_COUNT
+rx_slow_delay_table:
+        .byte RX_SLOW_BIT_DELAY_COUNT,NTSC_RX_SLOW_DELAY_COUNT
+rx_slow_half_table:
+        .byte RX_SLOW_HALF_DELAY_COUNT,NTSC_RX_SLOW_HALF_DELAY_COUNT

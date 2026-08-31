@@ -71,6 +71,10 @@ def test_keyboard_irqs_and_serial_critical_sections() -> None:
     assert "at_uart_2400:" in serial
     assert "sta tx_bit_delay_count" in serial
     assert "sta rx_bit_delay_count" in serial
+    assert "detect_video_standard:" in serial
+    assert "cpx #140" in serial
+    assert "NTSC_TX_BIT_DELAY_COUNT       = 11" in serial
+    assert "NTSC_RX_SLOW_HALF_DELAY_COUNT = 41" in serial
     assert "sr_wait_stop:" in serial
     assert "bne sr_wait_stop" in serial
     assert "Framing error" in serial
@@ -295,10 +299,13 @@ def test_video_capture_workflow_is_reproducible() -> None:
     assert "e2e-eight-player: e2e-prg" in makefile
     assert 'RACHEL_E2E_AI_PLAYERS=7' in makefile
     assert "e2e-reconnect: e2e-prg" in makefile
+    assert "e2e-full-game-ntsc: e2e-prg" in makefile
+    assert "RACHEL_E2E_REGION=ntsc" in makefile
     assert "RACHEL_E2E_DROP_AFTER_SERVER_FRAMES=10" in makefile
     assert 'RACHEL_E2E_MIN_PLAYERS", "2"' in full_game
     assert 'RACHEL_E2E_GAME_FRAMES", "120000"' in full_game
     assert 'RACHEL_E2E_WRITE_INTERVAL", "300ms"' in full_game
+    assert 'RACHEL_E2E_REGION", "pal"' in full_game
     assert '"reclaimed player" not in server_text' in full_game
 
 
@@ -310,11 +317,11 @@ def test_release_bundle_and_physical_checklist_exist() -> None:
     assert "release: test" in makefile
     assert '"rachel-vic20.prg"' in packager
     assert "sha256(archive.read_bytes())" in packager
-    assert "PAL VIC-20" in checklist
-    assert "NTSC serial operation is" in checklist
+    assert "PAL or NTSC VIC-20" in checklist
+    assert "Both timing sets complete" in checklist
     assert "eight-player match" in checklist
     assert '"docs/RELEASE_STATUS.md"' in packager
-    assert "emulator-verified PAL release candidate" in release_status
+    assert "emulator-verified PAL/NTSC release candidate" in release_status
     assert "does **not** expose disk save/resume" in release_status
 
 
@@ -334,7 +341,7 @@ def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     budget = (ROOT / "docs/SOLO_MEMORY_BUDGET.md").read_text()
     assert "Proceed with one PRG" in budget
     assert "2,048" in budget
-    assert "1,037" in budget
+    assert "962" in budget
     assert "RACHEL ONLINE" in budget and "RACHEL SOLO" in budget
 
 
