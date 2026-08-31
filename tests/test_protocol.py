@@ -329,7 +329,7 @@ def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     makefile = (ROOT / "Makefile").read_text()
     main = (ROOT / "src/main.asm").read_text()
     solo = (ROOT / "src/solo.asm").read_text() + "\n" + "\n".join(
-        path.read_text() for path in sorted((ROOT / "src/solo").glob("*.asm"))
+        path.read_text() for path in sorted((ROOT / "src/solo").rglob("*.asm"))
     )
     assert "solo-kernel-spike:" in makefile
     assert "solo-kernel-e2e: solo-kernel-spike" in makefile

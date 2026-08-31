@@ -2,6 +2,9 @@
 ; SOLO PUBLIC API, AI POLICY AND PERSISTENCE
 ; =============================================================================
 
+; Tiny deterministic opponent: choose canonical action zero. The catalogue
+; sorts every legal play before DRAW, so this is "first legal play, otherwise
+; draw" without duplicating a single legality rule.
 ; In: current player and workspace state. Out: C clear on applied action.
 ; Clobbers: A, X, Y and action-query temporaries.
 solo_ai_take_turn:

@@ -6,7 +6,7 @@ LD65 ?= ld65
 
 BUILD_DIR = build
 SRC_DIR = src
-ASM_SOURCES = $(wildcard $(SRC_DIR)/*.asm $(SRC_DIR)/net/*.asm $(SRC_DIR)/solo/*.asm)
+ASM_SOURCES = $(wildcard $(SRC_DIR)/*.asm $(SRC_DIR)/net/*.asm $(SRC_DIR)/solo/*.asm $(SRC_DIR)/solo/fixtures/*.asm)
 
 TARGET = $(BUILD_DIR)/rachel.prg
 MAP = $(BUILD_DIR)/rachel.map

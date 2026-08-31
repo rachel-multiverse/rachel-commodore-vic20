@@ -9,12 +9,15 @@ the generated program remain unchanged.
 
 | File | Responsibility |
 |---|---|
-| `solo/ui.asm` | memory contract, kernel descriptor and offline front end |
+| `solo/layout.asm` | compact workspace contract, assertions and kernel descriptor |
+| `solo/ui.asm` | offline front end |
 | `solo/api.asm` | AI policy, action count and persistent-state API |
 | `solo/actions.asm` | indexed action decoding and state transitions |
-| `solo/deck.asm` | card encoding, packed deck, hands, shuffle and PRNG |
-| `solo/rules.asm` | legality queries, turn rules and private storage |
-| `solo/fixtures.asm` | code and data assembled only with `SOLO_KERNEL_TEST` |
+| `solo/deck.asm` | card encoding, packed deck, hands and shuffle |
+| `solo/random.asm` | seed normalisation, xorshift64 and bounded reduction |
+| `solo/rules.asm` | legality queries and turn rules |
+| `solo/state.asm` | private tables and statically allocated temporaries |
+| `solo/fixtures.asm` | root of subsystem fixtures assembled only with `SOLO_KERNEL_TEST` |
 
 The include order in `src/solo.asm` is deliberate. Keep data near its owning
 module, but remember that labels remain visible across the whole translation
@@ -43,10 +46,10 @@ explicitly rather than relying on incidental flags.
 Solo play and online play are mutually exclusive. The 80-byte solo workspace
 overlays the first 80 bytes of the contiguous RUBP transmit/receive buffers;
 its 16-byte scratch area occupies the next bytes in the receive buffer. Compile-
-time assertions in `solo/ui.asm` make that relationship fail at assembly time if
+time assertions in `solo/layout.asm` make that relationship fail at assembly time if
 the protocol buffers or compact state layout move.
 
-Variables below the routines in `solo/rules.asm` are private storage, not an
+Variables in `solo/state.asm` are private storage, not an
 external ABI. The offsets beginning with `SW_` and the save/info formats are
 contracts and require fixture and documentation updates when changed.
 

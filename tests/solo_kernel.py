@@ -10,9 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def solo_source() -> str:
     """Return the solo translation unit in assembly order."""
-    root = (ROOT / "src/solo.asm").read_text()
-    modules = sorted((ROOT / "src/solo").glob("*.asm"))
-    return root + "\n" + "\n".join(path.read_text() for path in modules)
+    def expand(path: Path) -> str:
+        source = path.read_text()
+        parts = [source]
+        for request in re.findall(r'^\.include "([^"]+)"', source, re.MULTILINE):
+            parts.append(expand(path.parent / request))
+        return "\n".join(parts)
+
+    return expand(ROOT / "src/solo.asm")
 
 
 def main() -> None:
