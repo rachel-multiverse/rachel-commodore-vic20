@@ -8,7 +8,8 @@ A VIC-20 client for the Rachel card game, written in 6502 assembly.
 - **Video standard**: PAL and NTSC are automatically detected; both network
   timing sets are emulator-verified, with physical verification pending
 - **Networking**: ESP8266/ESP32 WiFi modem connected to user port
-- **Assembler**: cc65 toolchain (ca65, ld65)
+- **Assembler**: cc65 toolchain (ca65, ld65) for the release build; optionally
+  [Asm198x](https://asm198x.github.io) 0.0.53 or newer as a second assembler
 
 ## Building
 
@@ -29,6 +30,33 @@ harness, while `make test` enforces a 2 KiB CODE contingency. See
 `build/release/`, containing the production PRG, instructions and physical
 hardware test checklist. See `docs/RELEASE_STATUS.md` for the exact claims and
 remaining real-hardware blockers.
+
+### Assembling with Asm198x
+
+[Asm198x](https://asm198x.github.io) assembles this source tree as well, and
+`make asm198x-check` is worth running before you trust a change:
+
+```bash
+brew install asm198x        # or upgrade: the check needs 0.0.53 or newer
+make asm198x-check
+```
+
+`src/asm198x.asm` is a compatibility root rather than a second implementation.
+It selects a flat layout and then walks the exact production include graph from
+`src/main.asm`, so the check assembles the same sources the release does. A
+second assembler reading the same code is a cheap way to catch syntax this
+project only gets away with because ca65 is lenient — a label written hard
+against its directive, for instance, assembles under ca65 and silently fails to
+define the symbol under Asm198x.
+
+**ca65 and ld65 stay authoritative for the release PRG.** Asm198x's ca65 path
+links a fixed flat segment set, so it does not produce the BASIC stub or the
+`vic20-8k.cfg` layout that a real VIC-20 loads. Treat `make asm198x-check` as a
+source-compatibility gate, not a second way to build a release.
+
+An older Asm198x fails on `.ifndef` and `.define` and cannot get past
+`src/main.asm`. If the check stops on an unsupported directive, upgrade before
+assuming the source is at fault.
 
 ## Running
 
@@ -79,15 +107,42 @@ The WiFi modem connects to the VIC-20 user port:
 - User-port pin C / VIA PB0: RX (input)
 - GND: Ground
 
-Uses ESP-AT commands for ESP8266/ESP32 modems. This pin mapping targets the
-real Sven Petersen C64 WiFi modem with the
-documented VIC-20 edge adapter. The driver waits for the ESP-AT `CIPSEND`
-prompt before transmitting and strips `+IPD`/status text by
-synchronising received data on the RUBP `RACH` magic.
+The driver waits for the ESP-AT `CIPSEND` prompt before transmitting, and
+strips `+IPD`/status text by synchronising received data on the RUBP `RACH`
+magic. The ESP-AT link drops to 2400 baud before TCP traffic so the software
+UART can receive continuous frames reliably.
 
-Do not connect a bare 3.3V ESP module directly to 5V logic or power. Use the
-documented modem/edge-adapter combination or suitable regulation and level
-translation. See `docs/HARDWARE_TESTING.md` before trying physical hardware.
+### What the client needs from a modem
+
+No physical unit has been through `docs/HARDWARE_TESTING.md` yet, so this is a
+specification to check a candidate against rather than a tested endorsement.
+Two requirements do most of the work:
+
+**Stock Espressif ESP-AT firmware.** This client drives the ESP's own AT
+command set directly — `AT+CIPSTART`, `AT+CIPSEND`, `+IPD`. Most Commodore
+user-port WiFi modems instead ship a Hayes-style emulation descended from the
+[1200baud](https://1200baud.wordpress.com) firmware, which answers `ATDT
+host:port` and knows nothing about `AT+CIPSTART`. Such a board is electrically
+fine and functionally wrong until its ESP8266/ESP32 is reflashed with
+Espressif's AT build.
+
+**A VIC-20 pinout, not a C64 one.** On the VIC-20 the user port carries VIA #1,
+so pin M is CB2 and pin B is CB1. The C64's identical-looking connector puts
+different signals in those positions. A board sold as a "C64 user port WiFi
+modem" is therefore not automatically correct here — confirm which pins it
+actually drives before connecting it.
+
+[Sven Petersen's C64-WiFi-Modem-User-Port](https://github.com/svenpetersen1965/C64-WiFi-Modem-User-Port)
+is the reference design this driver's pin mapping targets, and it provides the
+5V/3.3V level shifting the user port requires. Its own documentation describes
+it as a C64 device and points at the 1200baud firmware, so both checks above
+apply to it. Other user-port boards list VIC-20 support — StrikeLink and the
+Turbo56K modem among them — but each carries its own firmware, so hold them to
+the same two questions.
+
+Do not connect a bare 3.3V ESP module directly to 5V logic or power. Confirm
+regulation, level translation, connector orientation and common ground before
+switching on. See `docs/HARDWARE_TESTING.md` before trying physical hardware.
 
 The client observes one VIC-I raster frame at startup and selects independent
 PAL or NTSC software-UART timings. Complete online matches pass under both
