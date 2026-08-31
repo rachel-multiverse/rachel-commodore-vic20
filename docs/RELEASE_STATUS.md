@@ -2,10 +2,15 @@
 
 ## Current classification
 
-This build is an **emulator-verified PAL/NTSC release candidate**. It is feature
+This is **v1.0.0**, an emulator-verified PAL/NTSC release. It is feature
 complete for two-to-eight-seat solo play and online RUBP play in one 8K-expanded
-PRG. It must remain labelled experimental on physical hardware until the
-checklist in `HARDWARE_TESTING.md` is completed on a real unit.
+PRG.
+
+The version number records what has been verified, which is emulation. It must
+remain labelled experimental on physical hardware until the checklist in
+`HARDWARE_TESTING.md` is completed on a real unit, and the blockers below are
+unchanged by the tag: a 1.0.0 that has never run on a VIC-20 is still a 1.0.0
+that has never run on a VIC-20.
 
 ## Verified without physical hardware
 
