@@ -18,17 +18,17 @@ The 8K expansion exposes `$1200-$3FFF`; CODE occupies `$1210-$3FFF`:
 | Item | Bytes |
 |---|---:|
 | Linker CODE capacity | 11,760 |
-| Current production CODE payload | 7,863 |
-| Current unused CODE | 3,897 |
+| Current production CODE payload | 7,878 |
+| Current unused CODE | 3,882 |
 | Required contingency | 2,048 |
 | First-playable CODE ceiling | 9,712 |
-| Remaining first-slice implementation allowance | 1,849 |
+| Remaining first-slice implementation allowance | 1,834 |
 
 `tests/check_memory_budget.py` reads the fresh ld65 map, emits
 `build/memory-budget.json`, and fails once production CODE crosses 9,712 bytes.
 CI retains the JSON as an artifact.
 
-The current production PRG is 7,880 bytes including its load address, BASIC
+The current production PRG is 7,895 bytes including its load address, BASIC
 trampoline and padding. The test-only fixture harness adds executable catalogue,
 rejection, play and packed-deck draw assertions; its
 fixture and validation code are excluded from production.
@@ -69,9 +69,14 @@ contingency for no gameplay benefit. `SAVE_STATE`/`LOAD_STATE` are deferred
 until the playable slice proves its real code size. Their external RKSI image
 may reuse transport storage only while offline.
 
-The deterministic opponent iterates indexed legal actions and chooses the first
-play action, otherwise draw. Ace suit selection counts the remaining hand by
-suit. It does not implement its own legality rules.
+The deterministic opponent consumes indexed legal actions and does not
+implement its own legality rules.
+
+The shipped first policy is the documented budget fallback: select canonical
+action zero. Because the kernel orders every legal play before DRAW, this is
+deterministically “first legal play, otherwise draw”; Ace action expansion makes
+hearts the deterministic first nomination. The complete production policy is
+15 bytes and delegates both legality and mutation to the indexed kernel.
 
 The first rules-core checkpoint now implements `GET_ACTION_COUNT` and
 `GET_ACTION_AT` directly over hand masks. Portable action order is canonical by
@@ -123,6 +128,10 @@ their 900-byte ceiling. Compact persistence adds 216 bytes outside the original
 first-playable estimate. The remaining planned mode, AI and UI ceilings total
 1,110 bytes, leaving 739 bytes of additional headroom before the separately
 protected 2 KiB contingency.
+
+The deterministic opponent consumed 15 of its 250-byte ceiling. The remaining
+mode/reset and existing-display UI ceilings total 860 bytes, leaving 974 bytes
+of implementation headroom before the protected contingency.
 
 ## Executable fixture evidence
 
