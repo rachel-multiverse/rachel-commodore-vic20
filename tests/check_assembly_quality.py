@@ -59,6 +59,16 @@ def main() -> None:
         elif line.strip() and not line.lstrip().startswith(";"):
             previous_jsr = None
 
+    # A label written hard against its directive assembles under ca65 and then
+    # silently fails to define the symbol under Asm198x, so `make asm198x-check`
+    # reports the use site rather than the definition. Cheap to catch here.
+    for path in sorted((ROOT / "src").rglob("*.asm")):
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            assert not re.match(r"^[A-Za-z_][A-Za-z0-9_]*:\S", line), (
+                f"{path.relative_to(ROOT)}:{number}: put whitespace between a "
+                f"label and its directive: {line.strip()}"
+            )
+
     print("Assembly module graph, layout assertions and local call hygiene passed")
 
 

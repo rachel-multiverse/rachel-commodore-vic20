@@ -438,7 +438,7 @@ solo_lose_msg:   .byte "YOU LOSE!",0
 solo_place_msg:  .byte "YOU FINISH ",0
 solo_replay_msg: .byte "R REPLAY  O MENU",0
 players_msg:     .byte "HOW MANY PLAYERS?",0
-players_help_msg:.byte "PRESS 2 TO 8",0
+players_help_msg: .byte "PRESS 2 TO 8",0
 solo_ui_action:  .byte 0
 solo_ui_card:    .byte 0
 solo_ui_ordinal: .byte 0
