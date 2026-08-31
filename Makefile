@@ -6,6 +6,7 @@ LD65 ?= ld65
 
 BUILD_DIR = build
 SRC_DIR = src
+ASM_SOURCES = $(wildcard $(SRC_DIR)/*.asm $(SRC_DIR)/net/*.asm $(SRC_DIR)/solo/*.asm)
 
 TARGET = $(BUILD_DIR)/rachel.prg
 MAP = $(BUILD_DIR)/rachel.map
@@ -17,7 +18,7 @@ SOLO_SPIKE_OBJECT = $(BUILD_DIR)/main-solo-kernel-spike.o
 # VIC-20 with 8KB expansion config
 CONFIG = vic20-8k.cfg
 
-.PHONY: all test solo-kernel-spike solo-kernel-e2e e2e-prg e2e-full-game e2e-full-game-ntsc e2e-eight-player e2e-reconnect capture-video release clean
+.PHONY: all test asm198x-check solo-kernel-spike solo-kernel-e2e e2e-prg e2e-full-game e2e-full-game-ntsc e2e-eight-player e2e-reconnect capture-video release clean
 
 all: $(BUILD_DIR) $(TARGET)
 	@echo "Built: $(TARGET)"
@@ -26,7 +27,7 @@ all: $(BUILD_DIR) $(TARGET)
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(BUILD_DIR)/main.o: $(SRC_DIR)/main.asm $(SRC_DIR)/*.asm $(SRC_DIR)/net/*.asm
+$(BUILD_DIR)/main.o: $(ASM_SOURCES)
 	$(CA65) -t vic20 -o $@ $(SRC_DIR)/main.asm
 
 $(TARGET): $(BUILD_DIR)/main.o $(CONFIG)
@@ -36,13 +37,21 @@ test: all
 	python3 tests/test_protocol.py
 	python3 tests/solo_kernel.py
 	python3 tests/check_memory_budget.py
+	python3 tests/check_assembly_quality.py
+
+# AS198X may be either an installed binary or a path supplied by the caller.
+AS198X ?= asm198x
+asm198x-check: $(BUILD_DIR)
+	$(AS198X) asm --dialect ca65 src/asm198x.asm -o $(BUILD_DIR)/rachel-asm198x.bin \
+		--sym=$(BUILD_DIR)/rachel-asm198x.sym \
+		--debug=$(BUILD_DIR)/rachel-asm198x.debug198x
 
 solo-kernel-spike: $(BUILD_DIR) $(SOLO_SPIKE_TARGET)
 
 solo-kernel-e2e: solo-kernel-spike
 	python3 tests/solo_kernel_e2e.py
 
-$(SOLO_SPIKE_OBJECT): $(SRC_DIR)/main.asm $(SRC_DIR)/*.asm $(SRC_DIR)/net/*.asm
+$(SOLO_SPIKE_OBJECT): $(ASM_SOURCES)
 	$(CA65) -t vic20 -D SOLO_KERNEL_TEST=1 -o $@ $(SRC_DIR)/main.asm
 
 $(SOLO_SPIKE_TARGET): $(SOLO_SPIKE_OBJECT) $(CONFIG)
@@ -74,7 +83,7 @@ capture-video: e2e-prg
 release: test
 	python3 scripts/package_release.py
 
-$(E2E_OBJECT): $(SRC_DIR)/main.asm $(SRC_DIR)/*.asm $(SRC_DIR)/net/*.asm
+$(E2E_OBJECT): $(ASM_SOURCES)
 	$(CA65) -t vic20 -D E2E_AUTOPLAY=1 -o $@ $(SRC_DIR)/main.asm
 
 $(E2E_TARGET): $(E2E_OBJECT) $(CONFIG)

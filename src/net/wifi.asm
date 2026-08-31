@@ -678,13 +678,13 @@ at_cipclose:
 net_status:     .byte 0
 bytes_pending:  .byte 0
 close_match:    .byte 0
-send_error_match:.byte 0
+send_error_match: .byte 0
 tx_bit_delay_count: .byte 13
 rx_bit_delay_count: .byte RX_BIT_DELAY_COUNT
-rx_half_delay_count:.byte RX_HALF_DELAY_COUNT
+rx_half_delay_count: .byte RX_HALF_DELAY_COUNT
 video_standard:     .byte 0
-video_raster_previous:.byte 0
-video_raster_maximum:.byte 0
+video_raster_previous: .byte 0
+video_raster_maximum: .byte 0
 tx_fast_delay_table:
         .byte 13,NTSC_TX_BIT_DELAY_COUNT
 rx_fast_delay_table:

@@ -8,6 +8,13 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def solo_source() -> str:
+    """Return the solo translation unit in assembly order."""
+    root = (ROOT / "src/solo.asm").read_text()
+    modules = sorted((ROOT / "src/solo").glob("*.asm"))
+    return root + "\n" + "\n".join(path.read_text() for path in modules)
+
+
 def main() -> None:
     rksi = bytes.fromhex((ROOT / "tests/fixtures/kernel-state-v1.hex").read_text())
     assert rksi[:4] == b"RKSI"
@@ -20,9 +27,11 @@ def main() -> None:
     assert rksi[29:32] == bytes([2, 0x8C, 0x47])
     assert rksi[32:] == bytes([0, 1, 5, 0, 2, 0xCB, 0x83, 0])
 
-    source = (ROOT / "src/solo.asm").read_text()
-    assert "solo_workspace     = tx_buffer" in source
-    assert "solo_scratch       = rx_buffer+16" in source
+    source = solo_source()
+    buffers = (ROOT / "src/rubp.asm").read_text()
+    assert "solo_workspace:\n" in buffers
+    assert "rx_buffer:      .res 16" in buffers
+    assert "solo_scratch:   .res 16" in buffers
     assert "cpx #SOLO_WS_SIZE" in source
     assert "solo_fixture_validate:" in source
     assert "solo_get_action_count:" in source

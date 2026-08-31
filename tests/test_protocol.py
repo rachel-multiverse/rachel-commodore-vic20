@@ -271,7 +271,7 @@ def test_active_game_reconnect_reclaims_and_resynchronizes() -> None:
     wifi = (ROOT / "src/net/wifi.asm").read_text()
     assert "ensure_reconnect_token:" in protocol
     assert "sta tx_buffer+PAYLOAD_START+20,x" in protocol
-    assert "reconnect_token:.res 8" in protocol
+    assert "reconnect_token: .res 8" in protocol
     assert "track_closed_status:" in wifi
     assert "$43,$4c,$4f,$53,$45,$44" in wifi
     assert "lda #NET_ERROR\n        sta net_status" in wifi
@@ -328,7 +328,9 @@ def test_release_bundle_and_physical_checklist_exist() -> None:
 def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     makefile = (ROOT / "Makefile").read_text()
     main = (ROOT / "src/main.asm").read_text()
-    solo = (ROOT / "src/solo.asm").read_text()
+    solo = (ROOT / "src/solo.asm").read_text() + "\n" + "\n".join(
+        path.read_text() for path in sorted((ROOT / "src/solo").glob("*.asm"))
+    )
     assert "solo-kernel-spike:" in makefile
     assert "solo-kernel-e2e: solo-kernel-spike" in makefile
     assert "-D SOLO_KERNEL_TEST=1" in makefile
@@ -338,6 +340,9 @@ def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     assert ".word $000d" in solo
     assert "SOLO_WS_SIZE       = 80" in solo
     assert "SOLO_SCRATCH_SIZE  = 16" in solo
+    rubp = (ROOT / "src/rubp.asm").read_text()
+    assert "solo_workspace:\n" in rubp
+    assert "solo_scratch:   .res 16" in rubp
     budget = (ROOT / "docs/SOLO_MEMORY_BUDGET.md").read_text()
     assert "Proceed with one PRG" in budget
     assert "2,048" in budget

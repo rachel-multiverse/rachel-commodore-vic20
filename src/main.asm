@@ -4,6 +4,7 @@
 ; Requires 8KB+ memory expansion
 ; =============================================================================
 
+.ifndef ASM198X_FLAT
 .segment "BASIC"
 
 ; BASIC line 10: SYS 4624 ($1210). This makes the documented LOAD/RUN flow
@@ -16,6 +17,12 @@ basic_end:
         .word 0
 
 .segment "CODE"
+.else
+; Asm198x's ca65 path currently links a fixed flat/NROM segment set. Its
+; compatibility build exercises Rachel's complete source graph in CODE; ca65
+; and vic20-8k.cfg remain authoritative for the BASIC stub and release layout.
+.segment "CODE"
+.endif
 
 .include "equates.asm"
 

@@ -729,7 +729,7 @@ player_id_lo:   .byte 0
 player_id_hi:   .byte 0
 game_id_lo:     .byte 0
 game_id_hi:     .byte 0
-reconnect_token:.res 8, 0
+reconnect_token: .res 8, 0
 nominated_suit: .byte $FF
 chosen_suit:     .byte 0
 
@@ -737,7 +737,7 @@ chosen_suit:     .byte 0
 current_turn:       .byte 0
 direction:          .byte 0
 discard_top:        .byte 0
-nominated_suit_recv:.byte $FF
+nominated_suit_recv: .byte $FF
 pending_draws:      .byte 0
 pending_skips:      .byte 0
 deck_count:         .byte 0
@@ -763,6 +763,10 @@ crc_msb:            .byte 0
 crc_expected_hi:    .byte 0
 crc_expected_lo:    .byte 0
 
-; Buffers
+; Buffers. Solo mode deliberately aliases these labels; splitting RX at byte
+; 16 gives its scratch area a real address without changing the 64-byte frame.
+solo_workspace:
 tx_buffer:      .res 64, 0
-rx_buffer:      .res 64, 0
+rx_buffer:      .res 16, 0
+solo_scratch:   .res 16, 0
+                .res 32, 0
