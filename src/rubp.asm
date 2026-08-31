@@ -445,6 +445,8 @@ pgs_counts:
 
         lda rx_buffer+PAYLOAD_START+15
         sta game_over_flag
+        lda rx_buffer+PAYLOAD_START+16
+        sta winner_index
         ldx #0
 pgs_turn:
         lda rx_buffer+PAYLOAD_START+17,x
@@ -596,6 +598,18 @@ pts_hash:
 pts_done:
         rts
 
+process_player_won:
+        lda rx_buffer+PAYLOAD_START
+        sta winner_index
+        ldx #0
+ppw_turn:
+        lda rx_buffer+PAYLOAD_START+1,x
+        sta turn_number,x
+        inx
+        cpx #4
+        bne ppw_turn
+        rts
+
 ; -----------------------------------------------------------------------------
 ; Data
 ; -----------------------------------------------------------------------------
@@ -625,6 +639,7 @@ state_hash:         .res 8, 0
 state_hash_present: .byte 0
 server_sync_ack:     .byte 0
 game_over_flag:     .byte 0
+winner_index:        .byte $ff
 crc_hi:             .byte 0
 crc_lo:             .byte 0
 crc_msb:            .byte 0

@@ -172,6 +172,24 @@ def test_card_suits_use_the_wire_format_high_bits() -> None:
     assert full.count("        lsr") >= 6
 
 
+def test_player_feedback_and_terminal_result_are_wired() -> None:
+    main = (ROOT / "src/main.asm").read_text()
+    game = (ROOT / "src/game.asm").read_text()
+    protocol = (ROOT / "src/rubp.asm").read_text()
+
+    for message in (
+        "WAITING FOR GAME", "SELECT A CARD FIRST", "MOVE REJECTED-RETRY",
+        "YOU WIN!", "PLAYER ", " WINS!", "PRESS KEY TO FINISH",
+    ):
+        assert f'.byte "{message}' in main
+    assert '.byte "LR MOVE SP SELECT"' in game
+    assert '.byte "UP/DN SUIT:  RET PLAY"' in game
+    assert "jsr render_help\n        jsr render_hand" in main
+    # GAME_STATE contains terminal winner/turn data even if PLAYER_WON is late.
+    assert "lda rx_buffer+PAYLOAD_START+16\n        sta winner_index" in protocol
+    assert "process_player_won:" in protocol
+
+
 def test_rubp_v2_crc_is_generated_and_required() -> None:
     protocol = (ROOT / "src/rubp.asm").read_text()
     network = (ROOT / "src/net/wifi.asm").read_text()
@@ -208,6 +226,7 @@ if __name__ == "__main__":
     test_screen_clear_terminates_and_text_uses_screen_codes()
     test_recovery_and_action_metadata_are_wired()
     test_card_suits_use_the_wire_format_high_bits()
+    test_player_feedback_and_terminal_result_are_wired()
     test_rubp_v2_crc_is_generated_and_required()
     test_canonical_fixture_when_supplied_by_ci()
     print("VIC-20 RUBP/PRG conformance checks passed")

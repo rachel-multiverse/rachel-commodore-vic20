@@ -107,12 +107,14 @@ ml_check_turn:
 ml_check_error:
         cmp #MSG_ERROR
         bne ml_check_end
+        jsr render_rejected
         jsr send_sync_request
         jmp main_loop
 
 ml_check_end:
         cmp #MSG_PLAYER_WON
         bne ml_no_msg
+        jsr process_player_won
         jmp player_won
 
 ml_no_msg:
@@ -174,6 +176,7 @@ ml_suit_next:
         adc #1
         and #3
         sta chosen_suit
+        jsr render_help
         jsr render_hand
         jmp main_loop
 
@@ -183,12 +186,14 @@ ml_suit_prev:
         sbc #1
         and #3
         sta chosen_suit
+        jsr render_help
         jsr render_hand
         jmp main_loop
 
 ml_play:
         jsr count_selected
         bne ml_play_selected
+        jsr render_no_selection
         jmp main_loop           ; Nothing selected
 ml_play_selected:
         jsr selected_has_ace
@@ -198,10 +203,14 @@ ml_play_selected:
 ml_no_nomination:
         lda #$FF
 ml_send_play:
+        pha
+        jsr render_play_sent
+        pla
         jsr send_play_cards
         jmp main_loop
 
 ml_draw:
+        jsr render_draw_sent
         jsr send_draw
         jmp main_loop
 
@@ -221,13 +230,54 @@ conn_failed:
 
 game_over:
         jsr display_clear
-        lda #0
+        lda #7
+        sta ZP_CURSOR_X
+        lda #7
+        sta ZP_CURSOR_Y
+        lda winner_index
+        cmp my_index
+        bne go_other_won
+        lda #<msg_you_win
+        sta ZP_PTR1
+        lda #>msg_you_win
+        bne go_print_result
+go_other_won:
+        lda #<msg_player
+        sta ZP_PTR1
+        lda #>msg_player
+go_print_result:
+        sta ZP_PTR1+1
+        jsr print_string
+        lda winner_index
+        cmp my_index
+        beq go_turns
+        clc
+        adc #'1'
+        jsr print_char
+        lda #<msg_wins
+        sta ZP_PTR1
+        lda #>msg_wins
+        sta ZP_PTR1+1
+        jsr print_string
+go_turns:
+        lda #4
         sta ZP_CURSOR_X
         lda #10
         sta ZP_CURSOR_Y
-        lda #<msg_game_over
+        lda #<msg_turns
         sta ZP_PTR1
-        lda #>msg_game_over
+        lda #>msg_turns
+        sta ZP_PTR1+1
+        jsr print_string
+        lda turn_number+3
+        jsr print_hex
+        lda #1
+        sta ZP_CURSOR_X
+        lda #14
+        sta ZP_CURSOR_Y
+        lda #<msg_press_key
+        sta ZP_PTR1
+        lda #>msg_press_key
         sta ZP_PTR1+1
         jsr print_string
         jsr wait_key
@@ -293,16 +343,7 @@ wfw_welcome:
         lda #0
         sta wait_game_lo
         sta wait_game_hi
-        jsr display_clear
-        lda #0
-        sta ZP_CURSOR_X
-        lda #5
-        sta ZP_CURSOR_Y
-        lda #<msg_waiting
-        sta ZP_PTR1
-        lda #>msg_waiting
-        sta ZP_PTR1+1
-        jsr print_string
+        jsr render_waiting
 
 wfg_loop:
         jsr net_recv
@@ -336,8 +377,14 @@ wfg_message:
         cmp #MSG_HAND_SYNC
         beq wfg_sync
         cmp #MSG_GAME_STATE
+        beq wfg_state
+        cmp #MSG_PLAYER_LIST
         bne wfg_loop
+        jsr process_player_list_welcome
+        jsr render_waiting
+        jmp wfg_loop
 
+wfg_state:
         jsr process_game_state
         rts
 wfg_start:
@@ -349,15 +396,84 @@ wfg_sync:
         jmp wfg_loop
 .endproc
 
+render_waiting:
+        jsr display_clear
+        lda #2
+        sta ZP_CURSOR_X
+        lda #5
+        sta ZP_CURSOR_Y
+        lda #<msg_waiting
+        sta ZP_PTR1
+        lda #>msg_waiting
+        sta ZP_PTR1+1
+        jsr print_string
+        lda #5
+        sta ZP_CURSOR_X
+        lda #8
+        sta ZP_CURSOR_Y
+        lda #<msg_players
+        sta ZP_PTR1
+        lda #>msg_players
+        sta ZP_PTR1+1
+        jsr print_string
+        lda player_count
+        clc
+        adc #'0'
+        jsr print_char
+        rts
+
+render_play_sent:
+        lda #<msg_play_sent
+        ldx #>msg_play_sent
+        bne render_status
+render_draw_sent:
+        lda #<msg_draw_sent
+        ldx #>msg_draw_sent
+        bne render_status
+render_rejected:
+        lda #<msg_rejected
+        ldx #>msg_rejected
+        bne render_status
+render_no_selection:
+        lda #<msg_select_card
+        ldx #>msg_select_card
+render_status:
+        sta ZP_PTR1
+        stx ZP_PTR1+1
+        lda #0
+        sta ZP_CURSOR_X
+        lda #12
+        sta ZP_CURSOR_Y
+        jsr print_string
+        rts
+
 ; -----------------------------------------------------------------------------
 ; Messages
 ; -----------------------------------------------------------------------------
 msg_waiting:
-        .byte "WAITING FOR GAME...", 0
+        .byte "WAITING FOR GAME", 0
+msg_players:
+        .byte "PLAYERS: ", 0
 msg_conn_fail:
         .byte "CONNECTION FAILED", 0
-msg_game_over:
-        .byte "GAME OVER!", 0
+msg_you_win:
+        .byte "YOU WIN!", 0
+msg_player:
+        .byte "PLAYER ", 0
+msg_wins:
+        .byte " WINS!", 0
+msg_turns:
+        .byte "TURNS: ", 0
+msg_press_key:
+        .byte "PRESS KEY TO FINISH", 0
+msg_play_sent:
+        .byte "PLAY SENT           ", 0
+msg_draw_sent:
+        .byte "DRAW SENT           ", 0
+msg_rejected:
+        .byte "MOVE REJECTED-RETRY ", 0
+msg_select_card:
+        .byte "SELECT A CARD FIRST ", 0
 wait_game_lo:
         .byte 0
 wait_game_hi:

@@ -41,6 +41,7 @@ render_game:
         jsr render_card
 
         ; Show player hand
+        jsr render_help
         jsr render_hand
 
         rts
@@ -49,6 +50,57 @@ turn_msg:
         .byte "TURN: P", 0
 discard_msg:
         .byte "TOP: ", 0
+
+render_help:
+        lda #0
+        sta ZP_CURSOR_X
+        lda #14
+        sta ZP_CURSOR_Y
+        lda current_turn
+        cmp my_index
+        bne rh_waiting
+        lda #<your_turn_msg
+        sta ZP_PTR1
+        lda #>your_turn_msg
+        bne rh_help_print
+rh_waiting:
+        lda #<wait_turn_msg
+        sta ZP_PTR1
+        lda #>wait_turn_msg
+rh_help_print:
+        sta ZP_PTR1+1
+        jsr print_string
+        lda #0
+        sta ZP_CURSOR_X
+        lda #15
+        sta ZP_CURSOR_Y
+        lda #<controls_msg
+        sta ZP_PTR1
+        lda #>controls_msg
+        sta ZP_PTR1+1
+        jsr print_string
+        lda #0
+        sta ZP_CURSOR_X
+        lda #16
+        sta ZP_CURSOR_Y
+        lda #<suit_help_msg
+        sta ZP_PTR1
+        lda #>suit_help_msg
+        sta ZP_PTR1+1
+        jsr print_string
+        ldx chosen_suit
+        lda suit_chars,x
+        jsr print_char
+        rts
+
+your_turn_msg:
+        .byte "YOUR TURN - D DRAWS", 0
+wait_turn_msg:
+        .byte "WAITING FOR TURN", 0
+controls_msg:
+        .byte "LR MOVE SP SELECT", 0
+suit_help_msg:
+        .byte "UP/DN SUIT:  RET PLAY", 0
 
 ; -----------------------------------------------------------------------------
 ; Render player's hand

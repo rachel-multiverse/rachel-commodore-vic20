@@ -71,12 +71,24 @@ display_title:
         lda #>subtitle_msg
         sta ZP_PTR1+1
         jsr print_string
+
+        lda #2
+        sta ZP_CURSOR_X
+        lda #8
+        sta ZP_CURSOR_Y
+        lda #<start_msg
+        sta ZP_PTR1
+        lda #>start_msg
+        sta ZP_PTR1+1
+        jsr print_string
         rts
 
 title_msg:
         .byte "RACHEL", 0
 subtitle_msg:
         .byte "VIC-20 CLIENT", 0
+start_msg:
+        .byte "PRESS A KEY TO START", 0
 
 ; -----------------------------------------------------------------------------
 ; Print string at current cursor position

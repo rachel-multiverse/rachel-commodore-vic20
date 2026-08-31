@@ -98,6 +98,8 @@ def main() -> None:
         raise SystemExit(f"server rejected a client action; see {server_log_path}")
     if not screenshot_path.is_file():
         raise SystemExit("emulator did not produce the final screenshot")
+    if screenshot_path.stat().st_size < 1_000:
+        raise SystemExit("final screenshot is unexpectedly blank or truncated")
     print(f"Complete deterministic VIC-20 game passed: {OUTPUT}")
 
 
