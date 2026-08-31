@@ -333,7 +333,10 @@ def test_release_bundle_and_physical_checklist_exist() -> None:
     assert "Both timing sets complete" in checklist
     assert "eight-player match" in checklist
     assert '"docs/RELEASE_STATUS.md"' in packager
-    assert "emulator-verified PAL/NTSC release candidate" in release_status
+    # Pin the claim and its caveat together: the version number must not be
+    # able to drift away from what was actually verified.
+    assert "**v1.0.0**, an emulator-verified PAL/NTSC release" in release_status
+    assert "experimental on physical hardware" in release_status
     assert "does **not** expose disk save/resume" in release_status
 
 
