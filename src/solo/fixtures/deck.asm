@@ -9,6 +9,7 @@ sngfv_clear:
         bne sngfv_clear
         lda #42
         sta solo_workspace+SW_RANDOM_SEED
+        lda #2
         jsr solo_new_game
         lda solo_workspace+SW_DECK_COUNT
         cmp #37

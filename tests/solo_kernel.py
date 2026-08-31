@@ -35,7 +35,7 @@ def main() -> None:
     source = solo_source()
     buffers = (ROOT / "src/rubp.asm").read_text()
     assert "solo_workspace:\n" in buffers
-    assert "rx_buffer:      .res 16" in buffers
+    assert "rx_buffer:      .res 64" in buffers
     assert "solo_scratch:   .res 16" in buffers
     assert "cpx #SOLO_WS_SIZE" in source
     assert "solo_fixture_validate:" in source
@@ -54,7 +54,7 @@ def main() -> None:
     assert '"first legal play, otherwise' in source
     assert '.assert solo_workspace_fixture_end-solo_workspace_fixture = SOLO_WS_SIZE' in source
     assert re.search(r"\.byte \$cc,\$09\s+; two packed 6-bit ordinals", source)
-    print("Compact two-player fixture and 80+16-byte overlay are consistent")
+    print("Compact fixture and 118-byte eight-seat overlay are consistent")
 
 
 if __name__ == "__main__":

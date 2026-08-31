@@ -29,11 +29,13 @@ solo_card_to_ordinal:
         adc solo_pack_temp
         rts
 
-; Create the canonical two-player game using the 64-bit seed already stored in
+; Create the canonical game using the 64-bit seed already stored in
 ; SW_RANDOM_SEED. Zero is normalised to $00000000DEADBEEF like RachelEngine.
-; In: optional eight-byte seed at SW_RANDOM_SEED (all zero selects fallback).
+; In: A = seat count, 2 to 8; optional eight-byte seed at SW_RANDOM_SEED (all
+;     zero selects the fallback).
 ; Out: complete deterministic initial state. Clobbers: A, X, Y and deck temps.
 solo_new_game:
+        sta solo_new_players     ; survives the workspace clear below
         ldx #7
 sng_save_seed:
         lda solo_workspace+SW_RANDOM_SEED,x
@@ -55,7 +57,7 @@ sng_restore_seed:
         bpl sng_restore_seed
         lda #1
         sta solo_workspace+SW_LAYOUT_VERSION
-        lda #2
+        lda solo_new_players
         sta solo_workspace+SW_PLAYER_COUNT
         jsr solo_seed_normalize
 
@@ -98,25 +100,25 @@ sng_shuffle:
         dec solo_shuffle_index
         bne sng_shuffle
 
-        ; RachelEngine deals seven consecutive cards to each player.
+        ; RachelEngine deals consecutive cards to each seat in turn. The hand
+        ; size shrinks as the table fills so eight seats still fit one deck.
+        ldx solo_workspace+SW_PLAYER_COUNT
+        lda solo_deal_sizes-2,x
+        sta solo_deal_size
         lda #0
         sta solo_workspace+SW_CURRENT_PLAYER
-        lda #7
+sng_seat:
+        lda solo_deal_size
         sta solo_deal_remaining
-sng_deal0:
+sng_deal:
         jsr solo_deck_pop
         jsr solo_hand_set_ordinal
         dec solo_deal_remaining
-        bne sng_deal0
-        lda #1
-        sta solo_workspace+SW_CURRENT_PLAYER
-        lda #7
-        sta solo_deal_remaining
-sng_deal1:
-        jsr solo_deck_pop
-        jsr solo_hand_set_ordinal
-        dec solo_deal_remaining
-        bne sng_deal1
+        bne sng_deal
+        inc solo_workspace+SW_CURRENT_PLAYER
+        lda solo_workspace+SW_CURRENT_PLAYER
+        cmp solo_workspace+SW_PLAYER_COUNT
+        bcc sng_seat
         jsr solo_deck_pop
         jsr solo_ordinal_to_card
         sta solo_workspace+SW_TOP_DISCARD
@@ -125,6 +127,10 @@ sng_deal1:
         lda #0
         sta solo_workspace+SW_CURRENT_PLAYER
         rts
+
+; docs/GAME_RULES.md, indexed by seat count from two.
+solo_deal_sizes:
+        .byte 7, 7, 7, 7, 6, 6, 5
 
 ; Kept at this point in the translation unit so the refactor is byte-identical.
 ; The include also exercises nested source resolution in both assemblers.
@@ -263,16 +269,21 @@ sdp_shift:
         ora solo_pack_temp
         sta solo_workspace+SW_PACKED_DECK,x
         inx
-        cpx #39
+        cpx #38
         bcc sdp_shift
-        lda solo_workspace+SW_PACKED_DECK+39
+        ; 52 six-bit ordinals occupy 39 bytes, so byte 38 is the last one and
+        ; shifts in zeros. Running the loop one byte further read and rewrote
+        ; SW_PACKED_DECK+39, which is SW_DISCARD_COUNT: every draw crushed the
+        ; discard count to zero, so the pile could never be recycled and the
+        ; deepest deck slot took its bits.
+        lda solo_workspace+SW_PACKED_DECK+38
         lsr
         lsr
         lsr
         lsr
         lsr
         lsr
-        sta solo_workspace+SW_PACKED_DECK+39
+        sta solo_workspace+SW_PACKED_DECK+38
         dec solo_workspace+SW_DECK_COUNT
         lda solo_drawn_ordinal
         rts
@@ -287,13 +298,11 @@ solo_hand_set_ordinal:
         lsr
         lsr
         tay
-        lda solo_workspace+SW_CURRENT_PLAYER
-        beq shso_player
+        jsr solo_hand_base
         tya
         clc
-        adc #7
+        adc solo_hand_offset
         tay
-shso_player:
         lda solo_workspace+SW_HAND_MASKS,y
         ora solo_bit_table,x
         sta solo_workspace+SW_HAND_MASKS,y
@@ -310,11 +319,7 @@ solo_hand_clear_card:
 
 ; Return Y=hand byte offset and X=bit index.
 solo_card_mask_address:
-        lda solo_workspace+SW_CURRENT_PLAYER
-        beq scma_player
-        lda #7
-scma_player:
-        sta solo_hand_offset
+        jsr solo_hand_base
         lda solo_scan_suit
         asl
         asl

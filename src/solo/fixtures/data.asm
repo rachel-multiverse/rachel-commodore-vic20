@@ -17,9 +17,16 @@ solo_workspace_fixture:
         .byte 2,$47                     ; discard count and top discard
         .byte $08,0,0,0,0,0,0          ; player 0 hand mask
         .byte 0,0,0,$08,0,0,$01         ; player 1 hand mask
-        .res 4,0
+        .res 42,0                       ; six unseated hand masks
 solo_workspace_fixture_end:
-.assert solo_workspace_fixture_end-solo_workspace_fixture = SOLO_WS_SIZE, error, "solo fixture must be 80 bytes"
+.assert solo_workspace_fixture_end-solo_workspace_fixture = SOLO_WS_SIZE, error, "solo fixture must match the workspace"
+
+scgfv_total:
+        .byte 0
+scgfv_mask_count:
+        .byte 0
+scgfv_mask_index:
+        .byte 0
 
 solo_fixture_result:
         .byte 0

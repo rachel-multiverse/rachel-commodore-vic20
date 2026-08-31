@@ -173,8 +173,12 @@ def test_recovery_and_action_metadata_are_wired() -> None:
 def test_card_suits_use_the_wire_format_high_bits() -> None:
     game = (ROOT / "src/game.asm").read_text()
     short = game[game.index("render_card_short:"):game.index("render_discard_card:")]
+    discard = game[game.index("render_discard_card:"):game.index("card_suit_index:")]
     full = game[game.index("card_suit_index:"):game.index("render_suit:")]
-    assert short.count("        lsr") == 6
+    # Both card renderers reach the suit through the same six-shift helper, so
+    # neither can drift onto a nibble of its own.
+    assert "jsr card_suit_index" in short
+    assert "jsr card_suit_index" in discard
     assert full.count("        lsr") >= 6
 
 
@@ -208,7 +212,12 @@ def test_public_table_represents_all_eight_players() -> None:
     assert "sta player_count" in counts
     render = game[game.index("render_game:"):game.index("turn_msg:")]
     assert "jsr display_clear\n" not in render
-    assert "jsr display_clear_row" in render
+    # Row clearing lives with the routine that owns the rows. render_table_state
+    # owns 12 and 13; neither it nor render_game may wipe the whole screen.
+    assert "jsr render_table_state" in render
+    state = game[game.index("render_table_state:"):game.index("draw_msg:")]
+    assert "jsr display_clear\n" not in state
+    assert "jsr display_clear_row" in state
 
 
 def test_player_feedback_and_terminal_result_are_wired() -> None:
@@ -223,10 +232,13 @@ def test_player_feedback_and_terminal_result_are_wired() -> None:
     ):
         assert f'.byte "{message}' in main
     assert '.byte "LR MOVE SP/FIRE SEL"' in game
-    assert '.byte "UP/DN SUIT:"' in game
-    assert '.byte " RET PLAY"' in game
+    assert '.byte "RET PLAYS SELECTION"' in game
     assert '.byte "YOU\'RE OUT - WATCHING"' in game
-    assert "jsr render_help\n        jsr render_hand" in main
+    # The nomination prompt borrows row 17 and clears it on every exit, so it
+    # cannot be left on screen behind whatever renders next.
+    modal = game[game.index("pick_suit_modal:"):game.index("render_hand_page:")]
+    assert "sps_confirm:" in modal and "sps_cancel:" in modal
+    assert modal.count("jsr display_clear_row") == 3
     # GAME_STATE contains terminal winner/turn data even if PLAYER_WON is late.
     assert "lda rx_buffer+PAYLOAD_START+16\n        sta winner_index" in protocol
     assert "local_finish_position" in protocol
@@ -338,7 +350,8 @@ def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     assert "solo_get_info:" in solo
     assert '.byte "RHKI"' in solo
     assert ".word $000d" in solo
-    assert "SOLO_WS_SIZE       = 80" in solo
+    assert "SOLO_WS_SIZE       = 118" in solo
+    assert "SOLO_MAX_PLAYERS   = 8" in solo
     assert "SOLO_SCRATCH_SIZE  = 16" in solo
     rubp = (ROOT / "src/rubp.asm").read_text()
     assert "solo_workspace:\n" in rubp
@@ -346,7 +359,7 @@ def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     budget = (ROOT / "docs/SOLO_MEMORY_BUDGET.md").read_text()
     assert "Proceed with one PRG" in budget
     assert "2,048" in budget
-    assert "962" in budget
+    assert "15" in budget
     assert "RACHEL ONLINE" in budget and "RACHEL SOLO" in budget
 
 
@@ -362,6 +375,158 @@ def test_rubp_v2_crc_is_generated_and_required() -> None:
     assert "cmp crc_lo" in protocol
     assert "net_send:\n        ; RUBP v2" in network
     assert "jsr rubp_finalize" in network
+
+
+def test_the_title_banner_uses_rom_glyphs_only() -> None:
+    display = (ROOT / "src/display.asm").read_text()
+    assert "render_logo:" in display
+    logo = display[display.index("render_logo:"):display.index("logo_index:")]
+    # Half-block glyphs from the character ROM, two sub-pixels per cell. A
+    # redefined set would have to live in RAM below $2000, which is CODE.
+    assert ".byte $20, $e1, $61, $a0" in logo
+    assert "$9005" not in display and "VIC_COLADDR" not in display
+    assert "lda #SCREEN_WIDTH" in logo          # a full 22-cell row
+    rows = [l for l in logo[logo.index("logo_bits:"):].splitlines() if ".byte" in l]
+    assert len(rows) == 5                       # five banner rows
+    assert all(l.count("$") == 6 for l in rows) # six bytes each: 24 cells, 22 drawn
+    title = display[display.index("display_title:"):display.index("render_logo:")]
+    assert "jsr render_logo" in title and "jsr render_title_suits" in title
+
+
+def test_hand_paging_keeps_the_cursor_on_screen() -> None:
+    game = (ROOT / "src/game.asm").read_text()
+    hand = game[game.index("render_hand:"):game.index("hand_msg:")]
+    page = hand[hand.index("rh_page_ready:"):hand.index("rh_loop:")]
+    # The page base must survive to the draw loop. Subtracting it back off
+    # cursor_pos left X holding cursor mod 5, which scrolled the selected card
+    # off the row for any hand longer than five cards.
+    assert page.count("sbc ZP_TEMP1") == 1
+    assert "ldx ZP_TEMP1" in hand
+    assert "render_hand_page:" in game
+    indicator = game[game.index("render_hand_page:"):game.index("set_card_playability:")]
+    for glyph in ("lda #'<'", "lda #'>'"):
+        assert glyph in indicator
+
+
+def test_playability_dimming_is_solo_only() -> None:
+    game = (ROOT / "src/game.asm").read_text()
+    playable = game[game.index("set_card_playability:"):game.index("render_card_short:")]
+    # Online play is render-only and the host owns legality: decision 0003.
+    assert "lda solo_ui_active" in playable
+    assert "jsr solo_card_is_legal" in playable
+    assert "cmp my_index" in playable
+    short = game[game.index("render_card_short:"):game.index("render_discard_card:")]
+    assert "COLOR_BLUE" in short
+
+
+def test_pending_attacks_and_nomination_reach_the_screen() -> None:
+    game = (ROOT / "src/game.asm").read_text()
+    state = game[game.index("render_table_state:"):game.index("render_help:")]
+    for field in ("pending_draws", "pending_skips", "deck_count", "nominated_suit_recv"):
+        assert field in state
+    for message in ("DRAW ", "SKIP ", " OR PLAY A 2", " OR RED JACK",
+                    " OR PLAY A 7", "DECK ", "SUIT "):
+        assert f'.byte "{message}"' in game
+    # Direction is tracked by both modes and now drawn beside the turn.
+    direction = game[game.index("render_direction:"):game.index("render_table_state:")]
+    assert "SW_PACKED_FLAGS" in direction
+    assert "lda direction" in direction
+    # Transient feedback must not land on the attack row and hide the one line
+    # that says how to answer the attack.
+    main = (ROOT / "src/main.asm").read_text()
+    feedback = main[main.index("render_status:\n        sta ZP_PTR1"):]
+    feedback = feedback[:feedback.index("jsr print_string")]
+    assert "lda #19" in feedback and "lda #12" not in feedback
+    assert state.count("jsr display_clear_row") == 3
+    for row in ("lda #12", "lda #13", "lda #19"):
+        assert row in state
+
+
+def test_ace_nomination_is_asked_for_when_the_ace_is_played() -> None:
+    game = (ROOT / "src/game.asm").read_text()
+    ui = (ROOT / "src/solo/ui.asm").read_text()
+    main = (ROOT / "src/main.asm").read_text()
+    # One prompt, shared by both modes.
+    assert "pick_suit_modal:" in game
+    assert '.byte "NOMINATE ' in game
+    play = ui[ui.index("sm_play:"):ui.index("sm_find_play:")]
+    assert "cmp #14" in play
+    assert "jsr pick_suit_modal" in play
+    online = main[main.index("ml_play_selected:"):main.index("ml_send_play:")]
+    assert "jsr selected_has_ace" in online
+    assert "jsr pick_suit_modal" in online
+    # The standing pre-selection is gone from both modes, so no Ace can be
+    # nominated on a control the player never touched.
+    for gone in ("sm_suit_next:", "sm_suit_prev:"):
+        assert gone not in ui
+    for gone in ("ml_suit_next:", "ml_suit_prev:"):
+        assert gone not in main
+    assert "UP/DN SUIT" not in game
+
+
+def test_solo_seats_are_addressed_by_arithmetic_not_a_two_player_branch() -> None:
+    solo = "\n".join(path.read_text() for path in sorted((ROOT / "src/solo").rglob("*.asm")))
+    assert "solo_hand_base:" in solo
+    # Every site that needs a seat's hand mask goes through the one helper, so
+    # none can be left behind on the old "player 0 or player 1" branch.
+    for caller in ("solo_hand_has_card:", "solo_card_mask_address:", "solo_hand_set_ordinal:"):
+        body = solo[solo.index(caller):]
+        assert "jsr solo_hand_base" in body[:body.index("rts")]
+    layout = (ROOT / "src/solo/layout.asm").read_text()
+    assert "SOLO_MAX_PLAYERS   = 8" in layout
+    assert "SOLO_SEAT_BYTES    = 7" in layout
+
+
+def test_turn_order_follows_direction_and_steps_over_finished_seats() -> None:
+    rules = (ROOT / "src/solo/rules.asm").read_text()
+    step = rules[rules.index("solo_step_player:"):rules.index("solo_advance_turn:")]
+    assert "SW_PACKED_FLAGS" in step            # direction
+    assert "SW_PLAYER_COUNT" in step            # wraps on the seat count
+    assert "jsr solo_player_is_out" in step     # passes over finished seats
+    advance = rules[rules.index("solo_advance_turn:"):rules.index("solo_has_seven:")]
+    assert "eor #1" not in advance
+    assert advance.count("jsr solo_step_player") == 2
+
+
+def test_the_packed_deck_stops_at_its_own_last_byte() -> None:
+    deck = (ROOT / "src/solo/deck.asm").read_text()
+    pop = deck[deck.index("solo_deck_pop:"):deck.index("solo_hand_set_ordinal:")]
+    # 52 six-bit ordinals are 39 bytes, indices 0-38. Touching +39 is
+    # SW_DISCARD_COUNT, which recycling depends on.
+    assert "cpx #38" in pop
+    assert "lda solo_workspace+SW_PACKED_DECK+39" not in pop
+    assert "sta solo_workspace+SW_PACKED_DECK+39" not in pop
+    assert "sta solo_workspace+SW_PACKED_DECK+38" in pop
+    layout = (ROOT / "src/solo/layout.asm").read_text()
+    assert "SW_PACKED_DECK     = 21" in layout
+    assert "SW_DISCARD_COUNT   = 60" in layout
+
+
+def test_deal_sizes_and_finish_follow_the_rules() -> None:
+    deck = (ROOT / "src/solo/deck.asm").read_text()
+    # docs/GAME_RULES.md: 7 cards to five players, 6 to six and seven, 5 to eight.
+    assert ".byte 7, 7, 7, 7, 6, 6, 5" in deck
+    assert "solo_deal_sizes-2,x" in deck
+    rules = (ROOT / "src/solo/rules.asm").read_text()
+    mark = rules[rules.index("solo_mark_out_if_empty:"):rules.index("solo_step_player:")]
+    assert "inc solo_workspace+SW_FINISH_COUNT" in mark
+    ui = (ROOT / "src/solo/ui.asm").read_text()
+    # The game is over once every seat but one has gone out.
+    over = ui[ui.index("jsr render_game"):ui.index("sm_not_over:")]
+    assert "SW_FINISH_COUNT" in over and "SW_PLAYER_COUNT" in over
+    assert "solo_ask_players:" in ui
+    assert '.byte "HOW MANY PLAYERS?"' in ui
+    assert '.byte "YOU FINISH "' in ui
+
+
+def test_solo_games_are_not_dealt_from_the_fixture_seed() -> None:
+    ui = (ROOT / "src/solo/ui.asm").read_text()
+    start = ui[ui.index("solo_mode_start:"):ui.index("sm_loop:")]
+    # 42 is the fixture vector in docs/SOLO_MEMORY_BUDGET.md. Seeding the
+    # interactive game with it dealt every game, and every replay, alike.
+    assert "lda #42" not in start
+    assert "JIFFY_LOW" in start
+    assert "VIC_RASTER" in start
 
 
 def test_canonical_fixture_when_supplied_by_ci() -> None:
@@ -386,6 +551,16 @@ if __name__ == "__main__":
     test_screen_clear_terminates_and_text_uses_screen_codes()
     test_recovery_and_action_metadata_are_wired()
     test_card_suits_use_the_wire_format_high_bits()
+    test_the_title_banner_uses_rom_glyphs_only()
+    test_hand_paging_keeps_the_cursor_on_screen()
+    test_playability_dimming_is_solo_only()
+    test_pending_attacks_and_nomination_reach_the_screen()
+    test_ace_nomination_is_asked_for_when_the_ace_is_played()
+    test_solo_games_are_not_dealt_from_the_fixture_seed()
+    test_solo_seats_are_addressed_by_arithmetic_not_a_two_player_branch()
+    test_turn_order_follows_direction_and_steps_over_finished_seats()
+    test_the_packed_deck_stops_at_its_own_last_byte()
+    test_deal_sizes_and_finish_follow_the_rules()
     test_petscii_cards_use_raw_codes_and_colour()
     test_public_table_represents_all_eight_players()
     test_player_feedback_and_terminal_result_are_wired()

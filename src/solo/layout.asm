@@ -1,14 +1,20 @@
 ; =============================================================================
-; RACHEL COMPACT TWO-PLAYER SOLO WORKSPACE BINDING
+; RACHEL COMPACT SOLO WORKSPACE BINDING
 ; =============================================================================
 ;
-; Offline lifetime only: the 80-byte constrained_2p_v2 workspace overlays the
-; first 80 bytes of the contiguous RUBP TX/RX buffers. Its 16 scratch bytes use
-; RX offsets 16-31. Online code and solo code must never be live together.
+; Offline lifetime only: the 118-byte constrained_8p_v3 workspace overlays the
+; contiguous RUBP TX/RX buffers, which are 128 bytes together. Online code and
+; solo code must never be live together.
+;
+; Eight seats need 56 bytes of hand mask rather than two seats' 14, which puts
+; the workspace past the 80 bytes that used to end where the scratch area
+; began. Everything at offsets 0-61 keeps its place, so the portable RKSI state
+; image and the canonical fixture are unaffected; only the hand-mask block
+; grew, and the scratch area moved out to its own storage.
 ;
 ; Public entry points in this module follow docs/ASSEMBLY_CONVENTIONS.md.
 
-SOLO_WS_SIZE       = 80
+SOLO_WS_SIZE       = 118
 SOLO_SCRATCH_SIZE  = 16
 
 SW_LAYOUT_VERSION  = 0
@@ -25,21 +31,23 @@ SW_DECK_COUNT      = 20
 SW_PACKED_DECK     = 21
 SW_DISCARD_COUNT   = 60
 SW_TOP_DISCARD     = 61
-SW_HAND_MASKS      = 62
+SW_HAND_MASKS      = 62          ; eight seats of seven bytes, 62-117
+SOLO_MAX_PLAYERS   = 8
+SOLO_SEAT_BYTES    = 7
 
 SOLO_ACTION_PLAY   = 0
 SOLO_ACTION_DRAW   = 1
 SOLO_NO_SUIT       = $ff
-SOLO_SAVE_BYTES    = 87
+SOLO_SAVE_BYTES    = 125
 SOLO_INFO_BYTES    = 19
 
 .assert rx_buffer-tx_buffer = 64, error, "RUBP buffers must remain contiguous"
-.assert tx_buffer+SOLO_WS_SIZE = solo_scratch, error, "solo workspace must end at scratch"
-.assert solo_scratch+SOLO_SCRATCH_SIZE <= rx_buffer+64, error, "solo scratch exceeds RX overlay"
-.assert SW_HAND_MASKS+14 <= SOLO_WS_SIZE, error, "two hand masks exceed solo workspace"
+.assert SOLO_WS_SIZE <= 128, error, "solo workspace must fit inside the RUBP buffers"
+.assert solo_scratch >= rx_buffer+64, error, "solo scratch must clear the RUBP buffers"
+.assert SW_HAND_MASKS+SOLO_MAX_PLAYERS*SOLO_SEAT_BYTES <= SOLO_WS_SIZE, error, "eight hand masks exceed solo workspace"
 
 ; GET_INFO-compatible compact-port descriptor at ZP_PTR1. It uses the shared
-; RHKI envelope but advertises only what this allocation-free two-player port
+; RHKI envelope but advertises only what this allocation-free compact port
 ; actually exposes: deterministic indexed actions, opaque workspace and no
 ; dynamic allocation. Full action tables and binary apply summaries are zero.
 ; In:  ZP_PTR1 -> at least SOLO_INFO_BYTES writable bytes.
@@ -59,7 +67,7 @@ solo_info_data:
         .byte "RHKI"
         .word 1                  ; kernel ABI
         .word 1                  ; RachelSpec
-        .byte 2,2                ; fixed two-player profile
+        .byte 2,8                ; two to eight seats
         .byte 112,7              ; action count / portable action bytes
         .word 0                  ; no resident full action table
         .word 0                  ; no binary apply-summary buffer

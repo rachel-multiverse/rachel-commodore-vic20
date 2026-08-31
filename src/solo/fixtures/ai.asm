@@ -76,6 +76,7 @@ saifv_soak_clear:
         bne saifv_soak_clear
         lda #42
         sta solo_workspace+SW_RANDOM_SEED
+        lda #2
         jsr solo_new_game
         lda #8
         sta solo_ai_soak_remaining

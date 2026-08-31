@@ -38,8 +38,11 @@ Load the program in a VIC-20 emulator (VICE xvic) with 8KB expansion:
 xvic -memory 8k build/rachel.prg
 ```
 
-Then type `RUN` to start. Choose `S` for a self-contained two-player solo game
-against the deterministic computer opponent, or `O` for online play.
+Then type `RUN` to start. Choose `S` for a self-contained solo game, which asks
+how many seats are at the table and fills the rest with computer opponents, or
+`O` for online play. Any table size the rules allow works, from two players to
+eight; the hand size follows `GAME_RULES.md`, so eight seats are dealt five
+cards each rather than seven.
 
 ## Controls
 
@@ -47,16 +50,21 @@ against the deterministic computer opponent, or `O` for online play.
 |-----|--------|
 | ← → | Move cursor |
 | SPACE | Select/deselect card |
-| ↑ ↓ | Choose suit for an ace |
 | RETURN | Play selected cards |
 | D | Draw card |
 | RUN/STOP | Quit game |
 
+Playing an Ace opens a prompt for the suit it nominates. The cursor keys move
+through the four suits, RETURN confirms, and RUN/STOP abandons the play. Both
+solo and online use the same prompt: the suit is chosen at the moment the Ace
+is played rather than pre-set on a control that is easy to never touch.
+
 Solo play accepts one card at a time: SPACE/fire or RETURN/fire+up plays the
-card under the cursor, and only when that exact move is legal. `D`/fire+down
-draws when drawing is the enumerated legal action. After the result, `R`
-replays the same deterministic deal and `O` returns to the mode menu. Online
-play retains multi-card selection with SPACE followed by RETURN.
+card under the cursor, and only when that exact move is legal. Cards that
+cannot be played right now are dimmed. `D`/fire+down draws when drawing is the
+enumerated legal action. After the result, `R` deals a fresh game at the same
+table size and `O` returns to the mode menu. Online play retains multi-card
+selection with SPACE followed by RETURN.
 
 ## Memory Map
 
@@ -145,17 +153,25 @@ reject actions based on stale state instead of relying on syntax alone.
 ## Screen Layout
 
 The VIC-20's 22×23 character display is used as:
-- Line 0: Turn indicator
+- Line 0: Turn indicator and play direction
 - Lines 2-7: PETSCII discard card
 - Lines 8-11: Public card counts for all eight seats
+- Line 12: Pending attack, and how it can be answered
+- Line 13: Draw deck size and any live Ace nomination
 - Lines 14-16: Turn state and controls
-- Lines 18-22: Player's hand
+- Line 17: Ace suit prompt, while it is open
+- Line 18: Hand size and which page of a long hand is shown
+- Line 19: Transient feedback
+- Line 20: Player's hand
 
-Keyboard and joystick are both supported. Left/right moves through the hand
-and up/down chooses the Ace suit. In Solo, Space/Fire or Return/Fire+up plays
-the card under the cursor. Online, Space/Fire selects cards and Return/Fire+up
-plays the selection. `D`/Fire+down draws. Short, non-blocking sound cues
-acknowledge movement, selection, actions, errors and the final result.
+A hand longer than five cards pages, and line 18 reports the visible slice with
+arrows for the cards either side of it.
+
+Keyboard and joystick are both supported. Left/right moves through the hand. In
+Solo, Space/Fire or Return/Fire+up plays the card under the cursor. Online,
+Space/Fire selects cards and Return/Fire+up plays the selection. `D`/Fire+down
+draws. Short, non-blocking sound cues acknowledge movement, selection, actions,
+errors and the final result.
 
 If an established TCP link closes, the client retains its opaque session token
 and assigned game ID, reconnects automatically, reclaims the same seat and
@@ -170,5 +186,15 @@ are followed by a manual retry-or-quit prompt.
 - `src/input.asm` - Keyboard handling
 - `src/rubp.asm` - RUBP protocol implementation
 - `src/game.asm` - Game rendering
+- `src/sound.asm` - Non-blocking sound cues
 - `src/connect.asm` - Connection handling
 - `src/net/wifi.asm` - WiFi modem driver
+- `src/solo.asm` - Assembly root for the offline game
+- `src/solo/layout.asm` - Compact workspace binding and kernel descriptor
+- `src/solo/ui.asm` - Offline front end
+- `src/solo/api.asm` - Kernel entry points and RKS2 persistence
+- `src/solo/actions.asm` - Action catalogue and application
+- `src/solo/deck.asm` - Packed deck, shuffle and deal
+- `src/solo/rules.asm` - Rule queries, turn order and action enumeration
+- `src/solo/state.asm` - Private tables and static storage
+- `src/solo/fixtures.asm` - Test-only fixtures, absent from production builds

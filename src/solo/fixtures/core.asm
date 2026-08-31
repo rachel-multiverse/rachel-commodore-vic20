@@ -54,22 +54,22 @@ sfv_deck_ok:
         bne sfv_bad_early
         jsr solo_get_action_count
         cmp #1
-        bne sfv_bad
+        bne sfv_bad_early
         lda #0
         jsr solo_get_action_at
-        bcs sfv_bad
+        bcs sfv_bad_early
         lda solo_action_kind
         cmp #SOLO_ACTION_DRAW
-        bne sfv_bad
+        bne sfv_bad_early
         inc solo_fixture_stage
         jsr solo_catalogue_fixture_load
         jsr solo_get_action_count
         cmp #7
-        bne sfv_bad
+        bne sfv_bad_mid
         inc solo_fixture_stage
         lda #0
         jsr solo_get_action_at
-        bcs sfv_bad
+        bcs sfv_bad_mid
         lda solo_action_kind
         bne sfv_bad
         lda solo_action_rank
@@ -96,17 +96,23 @@ sfv_deck_ok:
         lda #6
         jsr solo_get_action_at
         bcs sfv_bad
+        inc solo_fixture_stage
         lda solo_action_rank
         cmp #14
         bne sfv_bad
+        inc solo_fixture_stage
         lda solo_action_nomination
         cmp #3
         bne sfv_bad
+        inc solo_fixture_stage
         lda #7
         jsr solo_get_action_at
         bcc sfv_bad
         clc
         rts
+sfv_bad_mid:
+        jmp sfv_bad
+
 sfv_bad:
         sec
         rts
@@ -135,5 +141,10 @@ scfl_clear:
         sta solo_workspace+SW_HAND_MASKS+4
         lda #$40                  ; nine spades, ordinal 46
         sta solo_workspace+SW_HAND_MASKS+5
+        ; An all-zero hand mask is a seat that has gone out, and turn
+        ; advancement steps over it. Give the opponent a card so this synthetic
+        ; table is one the kernel could actually reach in play.
+        lda #$01                  ; two hearts, ordinal 0
+        sta solo_workspace+SW_HAND_MASKS+7
         rts
 

@@ -2,6 +2,44 @@
 ; SOLO RULE QUERIES, ACTION ENUMERATION AND PRIVATE STORAGE
 ; =============================================================================
 
+; Out: A = solo_hand_offset = the current player's hand-mask base, seat * 7.
+; The seat count is at most eight, so the product cannot leave a byte.
+; Clobbers: A. Preserves X and Y.
+solo_hand_base:
+        lda solo_workspace+SW_CURRENT_PLAYER
+        asl
+        asl                              ; seat * 4
+        clc
+        adc solo_workspace+SW_CURRENT_PLAYER
+        adc solo_workspace+SW_CURRENT_PLAYER
+        adc solo_workspace+SW_CURRENT_PLAYER
+        sta solo_hand_offset
+        rts
+
+; C=1 when the current player holds no cards at all.
+; Clobbers: A, Y and the seat scratch. Preserves X.
+solo_player_is_out:
+        jsr solo_hand_base
+        tay
+        lda #SOLO_SEAT_BYTES
+        sta solo_seat_count
+        lda #0
+        sta solo_seat_acc
+spio_byte:
+        lda solo_workspace+SW_HAND_MASKS,y
+        ora solo_seat_acc
+        sta solo_seat_acc
+        iny
+        dec solo_seat_count
+        bne spio_byte
+        lda solo_seat_acc
+        bne spio_holding
+        sec
+        rts
+spio_holding:
+        clc
+        rts
+
 solo_last_action_suit:
         ldx solo_effect_leader
         stx solo_last_suit
@@ -37,28 +75,58 @@ sfal_found:
         stx solo_effect_leader
         rts
 
+; Record the current player going out. FINISH_ORDER keeps its meaning as the
+; first player home; FINISH_COUNT is how many have gone out, which is what says
+; the game is over: play continues until one player is left holding cards, and
+; that player finishes last. A seat that is out never gets another turn, so it
+; cannot be counted twice.
 solo_mark_out_if_empty:
-        ldy #7
-        lda solo_workspace+SW_CURRENT_PLAYER
-        beq smo_player
-        ldx #7
-        bne smo_scan
-smo_player:
-        ldx #0
-smo_scan:
-        lda solo_workspace+SW_HAND_MASKS,x
-        bne smo_not_empty
-        inx
-        dey
-        bne smo_scan
-        lda #1
-        sta solo_workspace+SW_FINISH_COUNT
+        jsr solo_player_is_out
+        bcc smo_not_empty
+        lda solo_workspace+SW_FINISH_COUNT
+        bne smo_counted
         lda solo_workspace+SW_CURRENT_PLAYER
         sta solo_workspace+SW_FINISH_ORDER
+smo_counted:
+        inc solo_workspace+SW_FINISH_COUNT
 smo_not_empty:
         rts
 
-; Compact two-player turn advancement, including chained seven responses.
+; Move the turn one seat along the current direction, passing over any player
+; who has already gone out. PACKED_FLAGS bit 0 set means a Queen has reversed
+; play. The seat count bounds the search so a table of finished players cannot
+; spin, though the game ends before that can happen.
+; Clobbers: A, X, Y and the seat scratch.
+solo_step_player:
+        ldx solo_workspace+SW_PLAYER_COUNT
+ssp_try:
+        lda solo_workspace+SW_PACKED_FLAGS
+        and #1
+        bne ssp_reversed
+        lda solo_workspace+SW_CURRENT_PLAYER
+        clc
+        adc #1
+        cmp solo_workspace+SW_PLAYER_COUNT
+        bcc ssp_store
+        lda #0
+        beq ssp_store
+ssp_reversed:
+        lda solo_workspace+SW_CURRENT_PLAYER
+        bne ssp_down
+        lda solo_workspace+SW_PLAYER_COUNT
+ssp_down:
+        sec
+        sbc #1
+ssp_store:
+        sta solo_workspace+SW_CURRENT_PLAYER
+        jsr solo_player_is_out
+        bcc ssp_done
+        dex
+        bne ssp_try
+ssp_done:
+        rts
+
+; Turn advancement, including chained seven responses.
 solo_advance_turn:
         inc solo_workspace+SW_TURN_NUMBER
         bne sat_turn_ok
@@ -71,17 +139,13 @@ sat_turn_ok:
         lda solo_workspace+SW_PENDING_SKIPS
         beq sat_move
 sat_skip:
-        lda solo_workspace+SW_CURRENT_PLAYER
-        eor #1
-        sta solo_workspace+SW_CURRENT_PLAYER
+        jsr solo_step_player
         jsr solo_has_seven
         bcc sat_done
         dec solo_workspace+SW_PENDING_SKIPS
         bne sat_skip
 sat_move:
-        lda solo_workspace+SW_CURRENT_PLAYER
-        eor #1
-        sta solo_workspace+SW_CURRENT_PLAYER
+        jsr solo_step_player
 sat_done:
         rts
 
@@ -212,11 +276,7 @@ smia_good:
 
 ; X=suit, scan_rank=2...14. C=0 when current player's mask contains it.
 solo_hand_has_card:
-        lda solo_workspace+SW_CURRENT_PLAYER
-        beq shhc_player
-        lda #7
-shhc_player:
-        sta solo_hand_offset
+        jsr solo_hand_base
         txa
         asl
         asl

@@ -54,3 +54,8 @@ solo_complete_games_remaining: .byte 0
 solo_complete_games_passed: .byte 0
 solo_complete_games_bounded: .byte 0
 solo_complete_failure:  .byte 0
+solo_seat_index:        .byte 0
+solo_seat_count:        .byte 0
+solo_seat_acc:          .byte 0
+solo_deal_size:         .byte 0
+solo_new_players:       .byte 0
