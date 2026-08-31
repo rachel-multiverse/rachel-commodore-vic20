@@ -47,6 +47,8 @@ basic_end:
         jsr solo_persistence_fixture_validate
         bcs skt_fail
         jsr solo_ai_fixture_validate
+        bcs skt_fail
+        jsr solo_complete_game_fixture_validate
         bcc skt_ok
 skt_fail:
         lda #$ff
@@ -63,10 +65,24 @@ skt_store:
         ; for the duration of each timing-critical 8N1 transfer.
         cli
 
-        ; Wait for keypress
+mode_select:
         jsr wait_key
+        cmp #'S'
+        beq start_solo
+        cmp #'s'
+        beq start_solo
+        cmp #'O'
+        beq connect_details
+        cmp #'o'
+        bne mode_select
+        beq connect_details
+
+start_solo:
+        jmp solo_mode_start
 
 connect_details:
+        lda #0
+        sta solo_ui_active
         ; Get server address and optional private-room code.
         jsr input_ip_address
         jsr input_room_code

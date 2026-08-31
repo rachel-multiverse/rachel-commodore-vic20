@@ -109,7 +109,7 @@ title_msg:
 subtitle_msg:
         .byte "VIC-20 CLIENT", 0
 start_msg:
-        .byte "PRESS A KEY TO START", 0
+        .byte "S SOLO   O ONLINE", 0
 
 ; -----------------------------------------------------------------------------
 ; Print string at current cursor position

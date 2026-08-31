@@ -138,6 +138,9 @@ def stop_group(process: subprocess.Popen[str]) -> None:
 def main() -> None:
     require_environment()
     subprocess.run(["make", "e2e-prg"], cwd=ROOT, check=True)
+    linked = (ROOT / "build/rachel-e2e.prg").read_bytes()
+    sys_prg = ROOT / "build/rachel-e2e-sys.prg"
+    sys_prg.write_bytes(bytes((0x10, 0x12)) + linked[17:])
     shutil.rmtree(OUTPUT, ignore_errors=True)
     OUTPUT.mkdir(parents=True)
     session_path = OUTPUT / "session.json"
@@ -146,7 +149,7 @@ def main() -> None:
     emulator_log_path = OUTPUT / "emulator.json"
     session_path.write_text(json.dumps([
         {"action": "run_frames", "frames": 220},
-        {"action": "press_key", "key": "Space", "hold_frames": 3},
+        {"action": "press_key", "key": "O", "hold_frames": 3},
         {"action": "type_string", "text": "127.0.0.1\n\n", "hold_frames": 2,
          "settle_frames": 20},
         {"action": "run_frames", "frames": GAME_FRAMES},
@@ -168,8 +171,8 @@ def main() -> None:
             if proxy:
                 proxy.start()
             result = subprocess.run([
-                str(EMU_BIN), "--headless", "--ram-expansion-kb", "8",
-                "--prg", str(ROOT / "build/rachel-e2e.prg"), "--esp-at-tcp",
+                str(EMU_BIN), "--headless", "--ram-expansion-kb", "11",
+                "--prg", str(sys_prg), "--prg-sys", "--esp-at-tcp",
                 "--script", str(session_path), "--screenshot", str(screenshot_path),
             ], cwd=EMU, text=True, capture_output=True, timeout=360)
             emulator_log_path.write_text(result.stdout + result.stderr)

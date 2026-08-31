@@ -36,7 +36,8 @@ Load the program in a VIC-20 emulator (VICE xvic) with 8KB expansion:
 xvic -memory 8k build/rachel.prg
 ```
 
-Then type `RUN` to start.
+Then type `RUN` to start. Choose `S` for a self-contained two-player solo game
+against the deterministic computer opponent, or `O` for online play.
 
 ## Controls
 
@@ -48,6 +49,12 @@ Then type `RUN` to start.
 | RETURN | Play selected cards |
 | D | Draw card |
 | RUN/STOP | Quit game |
+
+Solo play accepts one card at a time: SPACE/fire or RETURN/fire+up plays the
+card under the cursor, and only when that exact move is legal. `D`/fire+down
+draws when drawing is the enumerated legal action. After the result, `R`
+replays the same deterministic deal and `O` returns to the mode menu. Online
+play retains multi-card selection with SPACE followed by RETURN.
 
 ## Memory Map
 

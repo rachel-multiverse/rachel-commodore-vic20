@@ -168,9 +168,17 @@ rh_help_print:
         sta ZP_PTR1+1
         lda #14
         jsr print_centered
+        lda solo_ui_active
+        beq rh_online_controls
+        lda #<solo_controls_msg
+        sta ZP_PTR1
+        lda #>solo_controls_msg
+        bne rh_controls_ready
+rh_online_controls:
         lda #<controls_msg
         sta ZP_PTR1
         lda #>controls_msg
+rh_controls_ready:
         sta ZP_PTR1+1
         lda #15
         jsr print_centered
@@ -200,6 +208,8 @@ watching_msg:
         .byte "YOU'RE OUT - WATCHING", 0
 controls_msg:
         .byte "LR MOVE SP/FIRE SEL", 0
+solo_controls_msg:
+        .byte "LR MOVE SP/FIRE PLAY", 0
 suit_help_msg:
         .byte "UP/DN SUIT:", 0
 play_help_msg:
@@ -224,7 +234,7 @@ render_hand:
         sta ZP_PTR1+1
         jsr print_string
 
-        ; Show hand count as two decimal digits (hands can contain 32 cards).
+        ; Show hand count as two decimal digits (hands can contain 52 cards).
         lda hand_count
         ldx #0
 rh_tens:
@@ -264,7 +274,7 @@ rh_digits:
         sta ZP_CURSOR_Y
 
         ; Five compact cards fit on a 22-column row. Show the page containing
-        ; the cursor so every one of the possible 32 cards remains reachable.
+        ; the cursor so every one of the possible 52 cards remains reachable.
         lda cursor_pos
 rh_page:
         cmp #5

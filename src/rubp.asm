@@ -748,7 +748,7 @@ player_out_mask:    .byte 0
 player_out_flag:    .byte 0
 finish_order:       .res 8, $ff
 local_finish_position: .byte $ff
-my_hand:            .res 32, 0
+my_hand:            .res 52, 0
 turn_number:        .res 4, 0
 state_hash:         .res 8, 0
 state_hash_present: .byte 0

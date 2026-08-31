@@ -233,6 +233,6 @@ cursor_pos:
 hand_count:
         .byte 0
 selected_cards:
-        .res 32, 0
+        .res 52, 0
 joystick_previous:
         .byte 0

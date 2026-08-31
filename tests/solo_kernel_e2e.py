@@ -21,6 +21,7 @@ def main() -> None:
         "solo_fixture_result", "solo_fixture_stage", "solo_apply_fixture_stage",
         "solo_new_game_fixture_stage", "solo_action_count",
         "solo_rng_fixture_stage",
+        "solo_complete_remaining", "solo_complete_pages",
         "solo_action_kind", "solo_action_rank", "solo_action_suit_mask",
         "solo_action_nomination", "solo_group_mask", "solo_valid_mask",
         "solo_scan_rank", "solo_debug_hand0", "solo_debug_hand1",
@@ -34,9 +35,17 @@ def main() -> None:
             raise SystemExit(f"{name} missing from label file")
         addresses[name] = int(match.group(1), 16)
     address = addresses["solo_fixture_result"]
+    # Direct-SYS the machine-code portion. The runtime's ordinary $1201 PRG
+    # inference currently forces an 8K *total* setting, which is too small for
+    # the test-only image even when 11K was explicitly requested.
+    linked = (ROOT / "build/rachel-solo-kernel-spike.prg").read_bytes()
+    sys_prg = ROOT / "build/rachel-solo-kernel-spike-sys.prg"
+    sys_prg.write_bytes(bytes((0x10, 0x12)) + linked[17:])
     session = ROOT / "build/solo-kernel-e2e.json"
     session.write_text(json.dumps([
-        {"action": "run_frames", "frames": 4000},
+        # The fixture now includes a complete deterministic match in addition
+        # to the focused kernel cases.
+        {"action": "run_frames", "frames": 30000},
         *(
             {
                 "action": "memory_read", "addr": item,
@@ -46,8 +55,10 @@ def main() -> None:
         ),
     ], indent=2) + "\n")
     result = subprocess.run([
-        str(BIN), "--headless", "--ram-expansion-kb", "8",
-        "--prg", str(ROOT / "build/rachel-solo-kernel-spike.prg"),
+        # Emu198x expresses high expansion in addition to the VIC's 3K low
+        # block: 11 therefore means 3K low + the required 8K at $2000.
+        str(BIN), "--headless", "--ram-expansion-kb", "11",
+        "--prg", str(sys_prg), "--prg-sys",
         "--script", str(session),
     ], cwd=EMU, check=True, text=True, capture_output=True)
     report = json.loads(result.stdout)

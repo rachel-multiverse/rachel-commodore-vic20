@@ -73,7 +73,7 @@ def make_session(frames: Path) -> tuple[list[dict[str, object]], int]:
     for _ in range(VIDEO_FPS * 2):
         index = screenshot(steps, frames, index)
     steps.extend([
-        {"action": "press_key", "key": "Space", "hold_frames": 3},
+        {"action": "press_key", "key": "O", "hold_frames": 3},
         {"action": "run_frames", "frames": 20},
     ])
     for _ in range(VIDEO_FPS):
@@ -105,6 +105,9 @@ def encode_video(frames: Path, video: Path) -> None:
 def main() -> None:
     require_environment()
     subprocess.run(["make", "e2e-prg"], cwd=ROOT, check=True)
+    linked = (ROOT / "build/rachel-e2e.prg").read_bytes()
+    sys_prg = ROOT / "build/rachel-e2e-sys.prg"
+    sys_prg.write_bytes(bytes((0x10, 0x12)) + linked[17:])
     shutil.rmtree(OUTPUT, ignore_errors=True)
     frames = OUTPUT / "frames"
     frames.mkdir(parents=True)
@@ -127,8 +130,8 @@ def main() -> None:
         try:
             wait_for_server(server)
             result = subprocess.run([
-                str(EMU_BIN), "--headless", "--ram-expansion-kb", "8",
-                "--prg", str(ROOT / "build/rachel-e2e.prg"), "--esp-at-tcp",
+                str(EMU_BIN), "--headless", "--ram-expansion-kb", "11",
+                "--prg", str(sys_prg), "--prg-sys", "--esp-at-tcp",
                 "--script", str(session_path),
             ], cwd=EMU, text=True, capture_output=True, timeout=300)
             emulator_log_path.write_text(result.stdout + result.stderr)
