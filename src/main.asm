@@ -30,6 +30,17 @@ basic_end:
         jsr sound_init
         jsr net_init
         jsr rubp_init
+.ifdef SOLO_KERNEL_TEST
+        jsr solo_fixture_load
+        jsr solo_fixture_validate
+        bcc skt_ok
+        lda #$ff
+        bne skt_store
+skt_ok:
+        lda #$a5
+skt_store:
+        sta solo_fixture_result
+.endif
         jsr display_title
 
         ; GETIN is fed by the KERNAL IRQ keyboard scanner. Keep interrupts
@@ -616,6 +627,7 @@ reconnect_attempts:
 .include "sound.asm"
 .include "net/wifi.asm"
 .include "rubp.asm"
+.include "solo.asm"
 .include "game.asm"
 .include "connect.asm"
 

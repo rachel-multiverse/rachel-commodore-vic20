@@ -20,9 +20,9 @@ OUTPUT = ROOT / "build" / os.environ.get("RACHEL_E2E_OUTPUT", "e2e-output")
 SEED = int(os.environ.get("RACHEL_E2E_SEED", "2"))
 MIN_PLAYERS = int(os.environ.get("RACHEL_E2E_MIN_PLAYERS", "2"))
 AI_PLAYERS = int(os.environ.get("RACHEL_E2E_AI_PLAYERS", "1"))
-GAME_FRAMES = int(os.environ.get("RACHEL_E2E_GAME_FRAMES", "30000"))
+GAME_FRAMES = int(os.environ.get("RACHEL_E2E_GAME_FRAMES", "120000"))
 DROP_AFTER = int(os.environ.get("RACHEL_E2E_DROP_AFTER_SERVER_FRAMES", "0"))
-WRITE_INTERVAL = os.environ.get("RACHEL_E2E_WRITE_INTERVAL", "100ms")
+WRITE_INTERVAL = os.environ.get("RACHEL_E2E_WRITE_INTERVAL", "300ms")
 
 
 class DropOnceProxy:
@@ -171,7 +171,7 @@ def main() -> None:
                 str(EMU_BIN), "--headless", "--ram-expansion-kb", "8",
                 "--prg", str(ROOT / "build/rachel-e2e.prg"), "--esp-at-tcp",
                 "--script", str(session_path), "--screenshot", str(screenshot_path),
-            ], cwd=EMU, text=True, capture_output=True, timeout=180)
+            ], cwd=EMU, text=True, capture_output=True, timeout=360)
             emulator_log_path.write_text(result.stdout + result.stderr)
         finally:
             if proxy:

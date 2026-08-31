@@ -297,6 +297,8 @@ def test_video_capture_workflow_is_reproducible() -> None:
     assert "e2e-reconnect: e2e-prg" in makefile
     assert "RACHEL_E2E_DROP_AFTER_SERVER_FRAMES=10" in makefile
     assert 'RACHEL_E2E_MIN_PLAYERS", "2"' in full_game
+    assert 'RACHEL_E2E_GAME_FRAMES", "120000"' in full_game
+    assert 'RACHEL_E2E_WRITE_INTERVAL", "300ms"' in full_game
     assert '"reclaimed player" not in server_text' in full_game
 
 
@@ -310,6 +312,23 @@ def test_release_bundle_and_physical_checklist_exist() -> None:
     assert "PAL VIC-20" in checklist
     assert "NTSC serial operation is" in checklist
     assert "eight-player match" in checklist
+
+
+def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
+    makefile = (ROOT / "Makefile").read_text()
+    main = (ROOT / "src/main.asm").read_text()
+    solo = (ROOT / "src/solo.asm").read_text()
+    assert "solo-kernel-spike:" in makefile
+    assert "solo-kernel-e2e: solo-kernel-spike" in makefile
+    assert "-D SOLO_KERNEL_TEST=1" in makefile
+    assert '.include "solo.asm"' in main
+    assert "SOLO_WS_SIZE       = 80" in solo
+    assert "SOLO_SCRATCH_SIZE  = 16" in solo
+    budget = (ROOT / "docs/SOLO_MEMORY_BUDGET.md").read_text()
+    assert "Proceed with one PRG" in budget
+    assert "2,048" in budget
+    assert "4,115" in budget
+    assert "RACHEL ONLINE" in budget and "RACHEL SOLO" in budget
 
 
 def test_rubp_v2_crc_is_generated_and_required() -> None:
@@ -356,6 +375,7 @@ if __name__ == "__main__":
     test_active_game_reconnect_reclaims_and_resynchronizes()
     test_video_capture_workflow_is_reproducible()
     test_release_bundle_and_physical_checklist_exist()
+    test_solo_kernel_spike_is_single_prg_budgeted()
     test_rubp_v2_crc_is_generated_and_required()
     test_canonical_fixture_when_supplied_by_ci()
     print("VIC-20 RUBP/PRG conformance checks passed")

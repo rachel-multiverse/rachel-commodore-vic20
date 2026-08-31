@@ -11,11 +11,13 @@ TARGET = $(BUILD_DIR)/rachel.prg
 MAP = $(BUILD_DIR)/rachel.map
 E2E_TARGET = $(BUILD_DIR)/rachel-e2e.prg
 E2E_OBJECT = $(BUILD_DIR)/main-e2e.o
+SOLO_SPIKE_TARGET = $(BUILD_DIR)/rachel-solo-kernel-spike.prg
+SOLO_SPIKE_OBJECT = $(BUILD_DIR)/main-solo-kernel-spike.o
 
 # VIC-20 with 8KB expansion config
 CONFIG = vic20-8k.cfg
 
-.PHONY: all test e2e-prg e2e-full-game e2e-eight-player e2e-reconnect capture-video release clean
+.PHONY: all test solo-kernel-spike solo-kernel-e2e e2e-prg e2e-full-game e2e-eight-player e2e-reconnect capture-video release clean
 
 all: $(BUILD_DIR) $(TARGET)
 	@echo "Built: $(TARGET)"
@@ -32,6 +34,19 @@ $(TARGET): $(BUILD_DIR)/main.o $(CONFIG)
 
 test: all
 	python3 tests/test_protocol.py
+	python3 tests/solo_kernel.py
+	python3 tests/check_memory_budget.py
+
+solo-kernel-spike: $(BUILD_DIR) $(SOLO_SPIKE_TARGET)
+
+solo-kernel-e2e: solo-kernel-spike
+	python3 tests/solo_kernel_e2e.py
+
+$(SOLO_SPIKE_OBJECT): $(SRC_DIR)/main.asm $(SRC_DIR)/*.asm $(SRC_DIR)/net/*.asm
+	$(CA65) -t vic20 -D SOLO_KERNEL_TEST=1 -o $@ $(SRC_DIR)/main.asm
+
+$(SOLO_SPIKE_TARGET): $(SOLO_SPIKE_OBJECT) $(CONFIG)
+	$(LD65) -C $(CONFIG) -o $@ -Ln $(BUILD_DIR)/solo-kernel-spike.lbl $< vic20.lib
 
 e2e-prg: $(BUILD_DIR) $(E2E_TARGET)
 

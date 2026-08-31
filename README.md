@@ -19,6 +19,11 @@ make test
 
 This produces `build/rachel.prg`.
 
+The measured solo-play feasibility work keeps one combined PRG as the primary
+design. `make solo-kernel-spike` builds the executable compact-workspace fixture
+harness, while `make test` enforces a 2 KiB CODE contingency. See
+`docs/SOLO_MEMORY_BUDGET.md` for the stage budgets and disk-menu fallback.
+
 `make release` creates a distributable ZIP and SHA-256 checksum under
 `build/release/`, containing the production PRG, instructions and physical
 hardware test checklist.
