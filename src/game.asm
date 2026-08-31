@@ -10,8 +10,9 @@ render_game:
         jsr display_clear
 
         ; Show current turn at top
-        lda #0
+        lda #7
         sta ZP_CURSOR_X
+        lda #0
         sta ZP_CURSOR_Y
 
         lda #<turn_msg
@@ -25,20 +26,15 @@ render_game:
         adc #'1'
         jsr print_char
 
-        ; Show discard pile
-        lda #0
-        sta ZP_CURSOR_X
-        lda #3
-        sta ZP_CURSOR_Y
-
+        ; Show discard pile as a PETSCII card.
         lda #<discard_msg
         sta ZP_PTR1
         lda #>discard_msg
         sta ZP_PTR1+1
-        jsr print_string
-
+        lda #2
+        jsr print_centered
         lda discard_top
-        jsr render_card
+        jsr render_discard_card
 
         ; Show player hand
         jsr render_help
@@ -49,13 +45,9 @@ render_game:
 turn_msg:
         .byte "TURN: P", 0
 discard_msg:
-        .byte "TOP: ", 0
+        .byte "DISCARD", 0
 
 render_help:
-        lda #0
-        sta ZP_CURSOR_X
-        lda #14
-        sta ZP_CURSOR_Y
         lda current_turn
         cmp my_index
         bne rh_waiting
@@ -69,16 +61,14 @@ rh_waiting:
         lda #>wait_turn_msg
 rh_help_print:
         sta ZP_PTR1+1
-        jsr print_string
-        lda #0
-        sta ZP_CURSOR_X
-        lda #15
-        sta ZP_CURSOR_Y
+        lda #14
+        jsr print_centered
         lda #<controls_msg
         sta ZP_PTR1
         lda #>controls_msg
         sta ZP_PTR1+1
-        jsr print_string
+        lda #15
+        jsr print_centered
         lda #0
         sta ZP_CURSOR_X
         lda #16
@@ -89,8 +79,12 @@ rh_help_print:
         sta ZP_PTR1+1
         jsr print_string
         ldx chosen_suit
-        lda suit_chars,x
-        jsr print_char
+        jsr render_suit
+        lda #<play_help_msg
+        sta ZP_PTR1
+        lda #>play_help_msg
+        sta ZP_PTR1+1
+        jsr print_string
         rts
 
 your_turn_msg:
@@ -100,7 +94,9 @@ wait_turn_msg:
 controls_msg:
         .byte "LR MOVE SP SELECT", 0
 suit_help_msg:
-        .byte "UP/DN SUIT:  RET PLAY", 0
+        .byte "UP/DN SUIT:", 0
+play_help_msg:
+        .byte " RET PLAY", 0
 
 ; -----------------------------------------------------------------------------
 ; Render player's hand
@@ -150,8 +146,7 @@ rh_digits:
         lda #'='
         jsr print_char
         ldx chosen_suit
-        lda suit_chars,x
-        jsr print_char
+        jsr render_suit
 
         ; Next line for cards
         lda #0
@@ -191,6 +186,8 @@ rh_loop:
         ; Check if this is cursor position
         cpx cursor_pos
         bne rh_no_cursor
+        lda #COLOR_YELLOW
+        jsr set_cursor_color
         lda #'['
         jsr print_char
         jmp rh_card
@@ -211,6 +208,8 @@ rh_card:
         ; Check if selected
         jsr check_selected
         bcc rh_not_sel
+        lda #COLOR_YELLOW
+        jsr set_cursor_color
         lda #'*'
         jsr print_char
         jmp rh_next
@@ -253,6 +252,8 @@ render_card_short:
         ; Get rank (low nibble)
         and #$0F
         tax
+        lda #COLOR_WHITE
+        jsr set_cursor_color
         lda rank_chars,x
         jsr print_char
 
@@ -266,29 +267,102 @@ render_card_short:
         lsr
         and #$03
         tax
-        lda suit_chars,x
-        jsr print_char
+        jsr render_suit
 
         rts
 
 ; -----------------------------------------------------------------------------
-; Render card (full form)
+; Render a five-by-five PETSCII discard card centred on the screen.
 ; Input: A = card byte
 ; -----------------------------------------------------------------------------
-render_card:
-        pha
+render_discard_card:
+        sta ZP_TEMP4
+        lda #8
+        sta ZP_CURSOR_X
+        lda #3
+        sta ZP_CURSOR_Y
+        lda #SC_TOP_LEFT
+        jsr render_frame_char
+        lda #SC_HLINE
+        jsr render_frame_char
+        lda #SC_HLINE
+        jsr render_frame_char
+        lda #SC_HLINE
+        jsr render_frame_char
+        lda #SC_TOP_RIGHT
+        jsr render_frame_char
 
-        ; Get rank
-        and #$0F
+        lda #8
+        sta ZP_CURSOR_X
+        lda #4
+        sta ZP_CURSOR_Y
+        lda #SC_VLINE
+        jsr render_frame_char
+        lda ZP_TEMP4
+        and #$0f
         tax
         lda rank_chars,x
         jsr print_char
-
         lda #' '
         jsr print_char
+        lda ZP_TEMP4
+        jsr card_suit_index
+        jsr render_suit
+        lda #SC_VLINE
+        jsr render_frame_char
 
-        ; Suit occupies bits 7-6 in the canonical card byte.
-        pla
+        lda #8
+        sta ZP_CURSOR_X
+        lda #5
+        sta ZP_CURSOR_Y
+        lda #SC_VLINE
+        jsr render_frame_char
+        lda #' '
+        jsr print_char
+        lda ZP_TEMP4
+        jsr card_suit_index
+        jsr render_suit
+        lda #' '
+        jsr print_char
+        lda #SC_VLINE
+        jsr render_frame_char
+
+        lda #8
+        sta ZP_CURSOR_X
+        lda #6
+        sta ZP_CURSOR_Y
+        lda #SC_VLINE
+        jsr render_frame_char
+        lda ZP_TEMP4
+        jsr card_suit_index
+        jsr render_suit
+        lda #' '
+        jsr print_char
+        lda ZP_TEMP4
+        and #$0f
+        tax
+        lda rank_chars,x
+        jsr print_char
+        lda #SC_VLINE
+        jsr render_frame_char
+
+        lda #8
+        sta ZP_CURSOR_X
+        lda #7
+        sta ZP_CURSOR_Y
+        lda #SC_BOTTOM_LEFT
+        jsr render_frame_char
+        lda #SC_HLINE
+        jsr render_frame_char
+        lda #SC_HLINE
+        jsr render_frame_char
+        lda #SC_HLINE
+        jsr render_frame_char
+        lda #SC_BOTTOM_RIGHT
+        jsr render_frame_char
+        rts
+
+card_suit_index:
         lsr
         lsr
         lsr
@@ -296,15 +370,22 @@ render_card:
         lsr
         lsr
         and #$03
-        asl
         tax
+        rts
 
-        ; Print suit name
-        lda suit_names,x
-        jsr print_char
-        lda suit_names+1,x
-        jsr print_char
+render_suit:
+        lda suit_colors,x
+        jsr set_cursor_color
+        lda suit_codes,x
+        jsr print_screen_code
+        rts
 
+render_frame_char:
+        pha
+        lda #COLOR_WHITE
+        jsr set_cursor_color
+        pla
+        jsr print_screen_code
         rts
 
 ; Card data
@@ -312,11 +393,16 @@ rank_chars:
         .byte '?', 'A', '2', '3', '4', '5', '6', '7'
         .byte '8', '9', 'T', 'J', 'Q', 'K', 'A', '?'
 
-suit_chars:
-        .byte 'H', 'D', 'C', 'S'
+; Raw VIC screen codes in RUBP suit order: hearts, diamonds, clubs, spades.
+suit_codes:
+        .byte $53, $5a, $58, $41
+suit_colors:
+        .byte COLOR_RED, COLOR_RED, COLOR_CYAN, COLOR_CYAN
 
-suit_names:
-        .byte "HE"              ; Hearts
-        .byte "DI"              ; Diamonds
-        .byte "CL"              ; Clubs
-        .byte "SP"              ; Spades
+; Box-drawing glyphs from the VIC-20 uppercase/graphics character ROM.
+SC_HLINE        = $40
+SC_TOP_RIGHT    = $49
+SC_BOTTOM_LEFT  = $4a
+SC_BOTTOM_RIGHT = $4b
+SC_TOP_LEFT     = $55
+SC_VLINE        = $5d

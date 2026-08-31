@@ -39,6 +39,16 @@ COLOR_BASE      = $9400         ; Color RAM
 SCREEN_WIDTH    = 22            ; Characters per row
 SCREEN_HEIGHT   = 23            ; Rows
 
+; VIC colour RAM values (standard character mode)
+COLOR_BLACK     = 0
+COLOR_WHITE     = 1
+COLOR_RED       = 2
+COLOR_CYAN      = 3
+COLOR_PURPLE    = 4
+COLOR_GREEN     = 5
+COLOR_BLUE      = 6
+COLOR_YELLOW    = 7
+
 ; VIA ports (User Port)
 VIA1_BASE       = $9110         ; VIA 1 base (user port)
 VIA1_PORTB      = $9110         ; Port B data

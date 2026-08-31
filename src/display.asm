@@ -37,6 +37,16 @@ dc_loop:
         iny
         bne dc_loop
 
+        ; Colour RAM is independent of screen RAM. Reset it as well so colour
+        ; applied to an old card cannot leak into later text at the same cell.
+        ldy #0
+        lda #COLOR_WHITE
+dc_color_loop:
+        sta COLOR_BASE,y
+        sta COLOR_BASE+$100,y
+        iny
+        bne dc_color_loop
+
         ; Reset cursor
         lda #0
         sta ZP_CURSOR_X
@@ -48,39 +58,25 @@ dc_loop:
 ; -----------------------------------------------------------------------------
 display_title:
         jsr display_clear
-
-        ; Position at top center
-        lda #6
-        sta ZP_CURSOR_X
-        lda #2
-        sta ZP_CURSOR_Y
-
         lda #<title_msg
         sta ZP_PTR1
         lda #>title_msg
         sta ZP_PTR1+1
-        jsr print_string
-
-        lda #4
-        sta ZP_CURSOR_X
-        lda #4
-        sta ZP_CURSOR_Y
+        lda #2
+        jsr print_centered
 
         lda #<subtitle_msg
         sta ZP_PTR1
         lda #>subtitle_msg
         sta ZP_PTR1+1
-        jsr print_string
-
-        lda #2
-        sta ZP_CURSOR_X
-        lda #8
-        sta ZP_CURSOR_Y
+        lda #4
+        jsr print_centered
         lda #<start_msg
         sta ZP_PTR1
         lda #>start_msg
         sta ZP_PTR1+1
-        jsr print_string
+        lda #8
+        jsr print_centered
         rts
 
 title_msg:
@@ -104,6 +100,35 @@ ps_loop:
         bne ps_loop
 ps_done:
         rts
+
+; -----------------------------------------------------------------------------
+; Print a null-terminated string centred on a screen row
+; Input: ZP_PTR1 = string address, A = row
+; Strings at least SCREEN_WIDTH characters wide start at column zero.
+; -----------------------------------------------------------------------------
+print_centered:
+        sta ZP_CURSOR_Y
+        ldy #0
+pc_count:
+        lda (ZP_PTR1),y
+        beq pc_length
+        iny
+        cpy #SCREEN_WIDTH
+        bcs pc_too_wide
+        bne pc_count
+pc_length:
+        tya
+        sta ZP_TEMP1
+        lda #SCREEN_WIDTH
+        sec
+        sbc ZP_TEMP1
+        lsr
+        sta ZP_CURSOR_X
+        jmp print_string
+pc_too_wide:
+        lda #0
+        sta ZP_CURSOR_X
+        jmp print_string
 
 ; -----------------------------------------------------------------------------
 ; Print character at current cursor position
@@ -153,6 +178,49 @@ pc_store:
         sta ZP_CURSOR_X
         inc ZP_CURSOR_Y
 pc_done:
+        rts
+
+; Print a raw VIC screen code without PETSCII/ASCII conversion.
+; Input: A = screen code
+print_screen_code:
+        pha
+        txa
+        pha
+        tya
+        pha
+
+        lda ZP_CURSOR_Y
+        tax
+        lda screen_lo,x
+        sta ZP_PTR2
+        lda screen_hi,x
+        sta ZP_PTR2+1
+        ldy ZP_CURSOR_X
+        sty ZP_PTR3
+        pla
+        sta ZP_PTR3+1
+        pla
+        tax
+        pla
+        jmp pc_store
+
+; Set the colour of the character at the current cursor without advancing it.
+; Input: A = VIC colour RAM value (0-7)
+set_cursor_color:
+        pha
+        txa
+        pha
+        lda ZP_CURSOR_Y
+        tax
+        lda color_lo,x
+        sta ZP_PTR2
+        lda color_hi,x
+        sta ZP_PTR2+1
+        ldy ZP_CURSOR_X
+        pla
+        tax
+        pla
+        sta (ZP_PTR2),y
         rts
 
 ; -----------------------------------------------------------------------------
@@ -220,3 +288,31 @@ screen_hi:
         .byte >(SCREEN_BASE+18*22), >(SCREEN_BASE+19*22)
         .byte >(SCREEN_BASE+20*22), >(SCREEN_BASE+21*22)
         .byte >(SCREEN_BASE+22*22)
+
+color_lo:
+        .byte <(COLOR_BASE+0*22), <(COLOR_BASE+1*22)
+        .byte <(COLOR_BASE+2*22), <(COLOR_BASE+3*22)
+        .byte <(COLOR_BASE+4*22), <(COLOR_BASE+5*22)
+        .byte <(COLOR_BASE+6*22), <(COLOR_BASE+7*22)
+        .byte <(COLOR_BASE+8*22), <(COLOR_BASE+9*22)
+        .byte <(COLOR_BASE+10*22), <(COLOR_BASE+11*22)
+        .byte <(COLOR_BASE+12*22), <(COLOR_BASE+13*22)
+        .byte <(COLOR_BASE+14*22), <(COLOR_BASE+15*22)
+        .byte <(COLOR_BASE+16*22), <(COLOR_BASE+17*22)
+        .byte <(COLOR_BASE+18*22), <(COLOR_BASE+19*22)
+        .byte <(COLOR_BASE+20*22), <(COLOR_BASE+21*22)
+        .byte <(COLOR_BASE+22*22)
+
+color_hi:
+        .byte >(COLOR_BASE+0*22), >(COLOR_BASE+1*22)
+        .byte >(COLOR_BASE+2*22), >(COLOR_BASE+3*22)
+        .byte >(COLOR_BASE+4*22), >(COLOR_BASE+5*22)
+        .byte >(COLOR_BASE+6*22), >(COLOR_BASE+7*22)
+        .byte >(COLOR_BASE+8*22), >(COLOR_BASE+9*22)
+        .byte >(COLOR_BASE+10*22), >(COLOR_BASE+11*22)
+        .byte >(COLOR_BASE+12*22), >(COLOR_BASE+13*22)
+        .byte >(COLOR_BASE+14*22), >(COLOR_BASE+15*22)
+        .byte >(COLOR_BASE+16*22), >(COLOR_BASE+17*22)
+        .byte >(COLOR_BASE+18*22), >(COLOR_BASE+19*22)
+        .byte >(COLOR_BASE+20*22), >(COLOR_BASE+21*22)
+        .byte >(COLOR_BASE+22*22)

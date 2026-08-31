@@ -216,15 +216,12 @@ ml_draw:
 
 conn_failed:
         jsr display_clear
-        lda #0
-        sta ZP_CURSOR_X
-        lda #5
-        sta ZP_CURSOR_Y
         lda #<msg_conn_fail
         sta ZP_PTR1
         lda #>msg_conn_fail
         sta ZP_PTR1+1
-        jsr print_string
+        lda #5
+        jsr print_centered
         jsr wait_key
         jmp quit_game
 
@@ -242,6 +239,8 @@ game_over:
         lda #>msg_you_win
         bne go_print_result
 go_other_won:
+        lda #4
+        sta ZP_CURSOR_X
         lda #<msg_player
         sta ZP_PTR1
         lda #>msg_player
@@ -260,7 +259,7 @@ go_print_result:
         sta ZP_PTR1+1
         jsr print_string
 go_turns:
-        lda #4
+        lda #6
         sta ZP_CURSOR_X
         lda #10
         sta ZP_CURSOR_Y
@@ -398,16 +397,13 @@ wfg_sync:
 
 render_waiting:
         jsr display_clear
-        lda #2
-        sta ZP_CURSOR_X
-        lda #5
-        sta ZP_CURSOR_Y
         lda #<msg_waiting
         sta ZP_PTR1
         lda #>msg_waiting
         sta ZP_PTR1+1
-        jsr print_string
         lda #5
+        jsr print_centered
+        lda #6
         sta ZP_CURSOR_X
         lda #8
         sta ZP_CURSOR_Y

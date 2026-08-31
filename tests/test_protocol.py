@@ -166,10 +166,24 @@ def test_recovery_and_action_metadata_are_wired() -> None:
 
 def test_card_suits_use_the_wire_format_high_bits() -> None:
     game = (ROOT / "src/game.asm").read_text()
-    short = game[game.index("render_card_short:"):game.index("render_card:")]
-    full = game[game.index("render_card:"):game.index("rank_chars:")]
+    short = game[game.index("render_card_short:"):game.index("render_discard_card:")]
+    full = game[game.index("card_suit_index:"):game.index("render_suit:")]
     assert short.count("        lsr") == 6
     assert full.count("        lsr") >= 6
+
+
+def test_petscii_cards_use_raw_codes_and_colour() -> None:
+    display = (ROOT / "src/display.asm").read_text()
+    game = (ROOT / "src/game.asm").read_text()
+    assert "print_screen_code:" in display
+    assert "set_cursor_color:" in display
+    assert "color_lo:" in display and "color_hi:" in display
+    assert "print_centered:" in display
+    assert ".byte $53, $5a, $58, $41" in game
+    assert ".byte COLOR_RED, COLOR_RED, COLOR_CYAN, COLOR_CYAN" in game
+    assert "render_discard_card:" in game
+    for glyph in ("SC_TOP_LEFT", "SC_TOP_RIGHT", "SC_BOTTOM_LEFT", "SC_BOTTOM_RIGHT"):
+        assert glyph in game
 
 
 def test_player_feedback_and_terminal_result_are_wired() -> None:
@@ -183,7 +197,8 @@ def test_player_feedback_and_terminal_result_are_wired() -> None:
     ):
         assert f'.byte "{message}' in main
     assert '.byte "LR MOVE SP SELECT"' in game
-    assert '.byte "UP/DN SUIT:  RET PLAY"' in game
+    assert '.byte "UP/DN SUIT:"' in game
+    assert '.byte " RET PLAY"' in game
     assert "jsr render_help\n        jsr render_hand" in main
     # GAME_STATE contains terminal winner/turn data even if PLAYER_WON is late.
     assert "lda rx_buffer+PAYLOAD_START+16\n        sta winner_index" in protocol
@@ -237,6 +252,7 @@ if __name__ == "__main__":
     test_screen_clear_terminates_and_text_uses_screen_codes()
     test_recovery_and_action_metadata_are_wired()
     test_card_suits_use_the_wire_format_high_bits()
+    test_petscii_cards_use_raw_codes_and_colour()
     test_player_feedback_and_terminal_result_are_wired()
     test_video_capture_workflow_is_reproducible()
     test_rubp_v2_crc_is_generated_and_required()

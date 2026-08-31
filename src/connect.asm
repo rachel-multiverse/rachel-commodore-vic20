@@ -9,16 +9,12 @@
 input_ip_address:
         jsr display_clear
 
-        lda #0
-        sta ZP_CURSOR_X
-        lda #2
-        sta ZP_CURSOR_Y
-
         lda #<ip_prompt
         sta ZP_PTR1
         lda #>ip_prompt
         sta ZP_PTR1+1
-        jsr print_string
+        lda #2
+        jsr print_centered
 
         ; Position for input
         lda #0
@@ -44,16 +40,12 @@ ip_buffer:
 do_connect:
         jsr display_clear
 
-        lda #0
-        sta ZP_CURSOR_X
-        lda #2
-        sta ZP_CURSOR_Y
-
         lda #<connect_msg
         sta ZP_PTR1
         lda #>connect_msg
         sta ZP_PTR1+1
-        jsr print_string
+        lda #2
+        jsr print_centered
 
         ; Parse IP address from buffer
         jsr parse_ip
