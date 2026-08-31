@@ -3,7 +3,7 @@
 ## Decision
 
 Proceed with one PRG for the first playable solo slice. The current production
-image leaves enough measured CODE space for a compact two-player kernel while
+image leaves enough measured CODE space for a compact solo kernel while
 retaining a hard 2 KiB contingency. A disk menu with separate online and solo
 programs remains a packaging fallback, not the current design.
 
@@ -18,30 +18,47 @@ The 8K expansion exposes `$1200-$3FFF`; CODE occupies `$1210-$3FFF`:
 | Item | Bytes |
 |---|---:|
 | Linker CODE capacity | 11,760 |
-| Current production CODE payload | 8,750 |
-| Current unused CODE | 3,010 |
+| Current production CODE payload | 9,697 |
+| Current unused CODE | 2,063 |
 | Required contingency | 2,048 |
 | First-playable CODE ceiling | 9,712 |
-| Remaining first-slice implementation allowance | 962 |
+| Remaining first-slice implementation allowance | 15 |
+
+The allowance fell from 962 to 15 on 31 August 2026, spending 947 bytes on
+issue #10: the visible game-state work (pending attacks, playability, the
+nomination prompt, hand paging, direction), the move from two seats to eight,
+and the block-graphic title banner. The 2,048-byte contingency is untouched
+and the single-PRG decision still holds, but this line is now spent: anything
+further has to free space rather than claim it.
+
+The title banner is drawn from the character ROM's half-block glyphs rather
+than a redefined character set. That is not only a size choice. The VIC can
+fetch glyphs from RAM below `$2000` or the ROM at `$8000`, and every
+1K-aligned RAM slot below `$2000` is inside CODE, so a custom set would mean
+splitting the CODE segment around an aligned hole and costing a further 512 to
+1,024 bytes. Worth revisiting only if CODE is ever restructured for another
+reason.
 
 `tests/check_memory_budget.py` reads the fresh ld65 map, emits
 `build/memory-budget.json`, and fails once production CODE crosses 9,712 bytes.
 CI retains the JSON as an artifact.
 
-The current production PRG is 8,767 bytes including its load address, BASIC
+The current production PRG is 9,714 bytes including its load address, BASIC
 trampoline and padding. The test-only fixture harness adds executable catalogue,
 rejection, play and packed-deck draw assertions; its
 fixture and validation code are excluded from production.
 
 ## Resident ownership and lifetime
 
-Solo mode uses the frozen `constrained_2p_v2` RachelWorkspace profile:
+Solo mode uses the `constrained_8p_v3` RachelWorkspace profile, which succeeded
+the two-seat `constrained_2p_v2` when the table grew to eight
+(docs/knowledge/decisions/0006-vintage-clients-may-ship-a-solo-kernel.md):
 
 | Storage | Bytes | Binding |
 |---|---:|---|
-| Resident workspace | 80 | `tx_buffer` through the first 16 bytes of `rx_buffer` |
-| Transient scratch | 16 | `rx_buffer+16` through `rx_buffer+31` |
-| Remaining overlaid receive bytes | 32 | available for indexed action/apply results |
+| Resident workspace | 118 | `tx_buffer` through `rx_buffer+53` |
+| Spare overlaid receive bytes | 10 | `rx_buffer+54` through `rx_buffer+63` |
+| Transient scratch | 16 | its own storage, outside both RUBP frames |
 | Zero page | 0 additional resident bytes | existing `ZP_TEMP*`/pointer temporaries only |
 
 This overlay is legal only because online transport and offline solo execution
@@ -59,7 +76,7 @@ and forbids recursion. The 16-byte kernel scratch area is not allocated on the
 
 The first slice implements the semantic equivalents of:
 
-- `NEW_GAME` — deterministic two-player deal and initial discard
+- `NEW_GAME` — deterministic deal for two to eight seats, and initial discard
 - `GET_ACTION_COUNT` — count legal draw/play choices without an action table
 - `GET_ACTION_AT` — inspect one canonical action, up to 16 bytes
 - `APPLY_ACTION` — mutate the compact workspace and return the bounded summary
@@ -86,7 +103,8 @@ counter rules and nominated-suit legality share the same enumerator.
 
 `APPLY_ACTION` now validates an indexed action before the first workspace
 write, then applies canonical card order, nomination, draw/skip attacks, red
-and black Jacks, reversals, finish marking and two-player turn advancement.
+and black Jacks, reversals, finish marking and directional turn advancement
+past players who have gone out.
 Packed-deck draws execute directly on the 6-bit stream. The same packed area
 stores the live deck followed by buried discards, preserving chronological
 discard order without another buffer. Exhaustion shuffles that exact trailing
@@ -97,7 +115,7 @@ over the packed deck. The executable seed-42 vector matches both hands, the top
 discard, first remaining card and final 64-bit RNG state from RachelEngine.
 
 `SAVE_STATE` and `LOAD_STATE` use a deterministic 87-byte `RKS2` image: magic,
-format version, payload length, the exact 80-byte workspace and checksum. Load
+format version, payload length, the exact 118-byte workspace and checksum. Load
 validates the complete image and structural bounds before its first workspace
 write. This compact persistence format is intentionally distinct from RKSI,
 whose general host representation does not describe the packed deck/discard
@@ -138,7 +156,7 @@ of implementation headroom before the protected contingency.
 `tests/fixtures/kernel-state-v1.hex` is the canonical RKSI fixture from
 RachelEngine. `tests/solo_kernel.py` checks its ABI/spec versions and state
 fields and checks the compact fixture binding. `make solo-kernel-spike` builds a
-test-only PRG whose 6502 loader copies exactly 80 bytes into the real overlay
+test-only PRG whose 6502 loader copies exactly 118 bytes into the real overlay
 and validates key fields.
 
 Emu198x executed that PRG with 8K expansion and read `$A5` from the exported
@@ -158,7 +176,7 @@ invalid winners and state-transition failures fail the run.
 Continue with a single PRG while all of these remain true:
 
 - production CODE is no larger than 9,712 bytes
-- resident workspace remains 80 bytes plus 16 scratch
+- resident workspace remains 118 bytes plus 16 scratch
 - no full action table is allocated
 - online/full-match tests remain unchanged and green
 - canonical fixtures agree with indexed legality and application results

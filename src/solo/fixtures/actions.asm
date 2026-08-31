@@ -86,6 +86,10 @@ sdfv_clear:
         sta solo_workspace+SW_PACKED_DECK+1
         lda #$01                  ; three spades (ordinal 40)
         sta solo_workspace+SW_HAND_MASKS+5
+        ; The opponent must hold something, or it is a finished seat that turn
+        ; advancement steps straight over.
+        lda #$01                  ; two hearts, ordinal 0
+        sta solo_workspace+SW_HAND_MASKS+7
 
         lda #0
         jsr solo_apply_action

@@ -763,10 +763,10 @@ crc_msb:            .byte 0
 crc_expected_hi:    .byte 0
 crc_expected_lo:    .byte 0
 
-; Buffers. Solo mode deliberately aliases these labels; splitting RX at byte
-; 16 gives its scratch area a real address without changing the 64-byte frame.
+; Buffers. Solo mode deliberately aliases these labels: its workspace spans
+; both 64-byte frames. The scratch area no longer fits inside them, so it has
+; its own storage rather than a split that would overlap the workspace.
 solo_workspace:
 tx_buffer:      .res 64, 0
-rx_buffer:      .res 16, 0
+rx_buffer:      .res 64, 0
 solo_scratch:   .res 16, 0
-                .res 32, 0

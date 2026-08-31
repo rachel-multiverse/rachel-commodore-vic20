@@ -83,31 +83,109 @@ dcr_loop:
 ; -----------------------------------------------------------------------------
 display_title:
         jsr display_clear
-        lda #<title_msg
-        sta ZP_PTR1
-        lda #>title_msg
-        sta ZP_PTR1+1
-        lda #2
-        jsr print_centered
+        jsr render_logo
+        jsr render_title_suits
 
-        lda #<subtitle_msg
-        sta ZP_PTR1
-        lda #>subtitle_msg
-        sta ZP_PTR1+1
-        lda #4
-        jsr print_centered
         lda #<start_msg
         sta ZP_PTR1
         lda #>start_msg
         sta ZP_PTR1+1
-        lda #8
+        lda #14
         jsr print_centered
         rts
 
-title_msg:
-        .byte "RACHEL", 0
-subtitle_msg:
-        .byte "VIC-20 CLIENT", 0
+; -----------------------------------------------------------------------------
+; Chunky title banner. Each cell carries two horizontal sub-pixels, so the
+; character ROM's half-block glyphs draw a 40-pixel-wide logo across 20 columns
+; with no custom character set. A custom set is not simply a budget question:
+; the VIC can only fetch glyphs from RAM below $2000 or the ROM at $8000, and
+; every 1K-aligned RAM slot down there is inside this program's own code.
+;
+; Two bits per cell, four cells per byte, most significant pair leftmost.
+; -----------------------------------------------------------------------------
+LOGO_TOP_ROW = 4
+LOGO_ROWS    = 5
+
+render_logo:
+        lda #0
+        sta logo_index
+        lda #LOGO_ROWS
+        sta logo_rows_left
+rlo_row:
+        lda #0
+        sta ZP_CURSOR_X
+        sta ZP_TEMP4            ; no bits held over between rows
+        ; A full 22-cell row leaves print_screen_code's own wrap to advance the
+        ; line, so the row is addressed outright rather than incremented.
+        lda #LOGO_TOP_ROW+LOGO_ROWS
+        sec
+        sbc logo_rows_left
+        sta ZP_CURSOR_Y
+        ldx logo_rows_left
+        lda logo_colors-1,x     ; the table runs bottom row first
+        sta ZP_TEMP3
+        lda #SCREEN_WIDTH
+        sta ZP_TEMP2
+rlo_cell:
+        lda ZP_TEMP4
+        bne rlo_have_bits
+        ldx logo_index
+        lda logo_bits,x
+        sta ZP_TEMP1
+        inc logo_index
+        lda #4
+        sta ZP_TEMP4
+rlo_have_bits:
+        dec ZP_TEMP4
+        lda #0
+        asl ZP_TEMP1
+        rol
+        asl ZP_TEMP1
+        rol
+        tax
+        lda ZP_TEMP3
+        jsr set_cursor_color
+        lda logo_glyphs,x
+        jsr print_screen_code
+        dec ZP_TEMP2
+        bne rlo_cell
+        dec logo_rows_left
+        bne rlo_row
+        rts
+
+; The four suits under the banner, each in its own colour.
+render_title_suits:
+        lda #6
+        sta ZP_CURSOR_X
+        lda #11
+        sta ZP_CURSOR_Y
+        ldx #0
+rtsu_loop:
+        jsr render_suit
+        lda #' '
+        jsr print_char
+        lda #' '
+        jsr print_char
+        inx
+        cpx #4
+        bcc rtsu_loop
+        rts
+
+logo_glyphs:
+        .byte $20, $e1, $61, $a0   ; blank, right half, left half, solid
+logo_colors:
+        .byte COLOR_BLUE, COLOR_CYAN, COLOR_CYAN, COLOR_WHITE, COLOR_WHITE
+logo_bits:
+        .byte $f0, $78, $7c, $cc, $fc, $c0
+        .byte $cc, $cc, $c0, $cc, $c0, $c0
+        .byte $f0, $fc, $c0, $fc, $f8, $c0
+        .byte $d8, $cc, $c0, $cc, $c0, $c0
+        .byte $cc, $cc, $7c, $cc, $fc, $f0
+logo_index:
+        .byte 0
+logo_rows_left:
+        .byte 0
+
 start_msg:
         .byte "S SOLO   O ONLINE", 0
 

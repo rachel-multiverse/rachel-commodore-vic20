@@ -85,6 +85,7 @@ KEY_SPACE       = 32
 KEY_ESC         = 3             ; RUN/STOP (Ctrl-C)
 KEY_DELETE      = 20
 JIFFY_LOW       = $A2           ; KERNAL software clock, advanced by IRQ
+JIFFY_MID       = $A1           ; Next byte up of the same clock
 
 ; -----------------------------------------------------------------------------
 ; RUBP Protocol Constants

@@ -258,10 +258,6 @@ ml_not_quit:
         beq ml_right
         cmp #KEY_SPACE
         beq ml_select
-        cmp #KEY_UP
-        beq ml_suit_next
-        cmp #KEY_DOWN
-        beq ml_suit_prev
         cmp #KEY_RETURN
         beq ml_play
         cmp #'D'
@@ -288,28 +284,6 @@ ml_select:
         jsr render_hand
         jmp main_loop
 
-ml_suit_next:
-        jsr sound_move
-        lda chosen_suit
-        clc
-        adc #1
-        and #3
-        sta chosen_suit
-        jsr render_help
-        jsr render_hand
-        jmp main_loop
-
-ml_suit_prev:
-        jsr sound_move
-        lda chosen_suit
-        sec
-        sbc #1
-        and #3
-        sta chosen_suit
-        jsr render_help
-        jsr render_hand
-        jmp main_loop
-
 ml_play:
         jsr count_selected
         bne ml_play_selected
@@ -318,8 +292,15 @@ ml_play:
 ml_play_selected:
         jsr selected_has_ace
         bcc ml_no_nomination
+        ; The selection contains an Ace, so a suit has to be named. Ask now,
+        ; and let the player back out of the whole play if they change their
+        ; mind at the prompt.
+        jsr pick_suit_modal
+        bcc ml_nominated
+        jmp main_loop
+ml_nominated:
         lda chosen_suit
-        bcs ml_send_play
+        jmp ml_send_play
 ml_no_nomination:
         lda #$FF
 ml_send_play:
@@ -605,12 +586,16 @@ render_rejected:
 render_no_selection:
         lda #<msg_select_card
         ldx #>msg_select_card
+; Transient feedback sits on row 19, just above the hand. Row 12 now carries
+; the pending attack, which must not be hidden by a message telling the player
+; to retry. render_table_state clears this row on the next full render, so the
+; message lives exactly as long as it always did.
 render_status:
         sta ZP_PTR1
         stx ZP_PTR1+1
         lda #0
         sta ZP_CURSOR_X
-        lda #12
+        lda #19
         sta ZP_CURSOR_Y
         jsr print_string
         rts

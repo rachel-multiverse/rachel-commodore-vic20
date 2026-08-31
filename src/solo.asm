@@ -1,5 +1,5 @@
 ; =============================================================================
-; RACHEL COMPACT TWO-PLAYER SOLO GAME
+; RACHEL COMPACT SOLO GAME
 ; =============================================================================
 ;
 ; This is the assembly root for the offline game. The included modules share

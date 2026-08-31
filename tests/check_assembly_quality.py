@@ -46,7 +46,8 @@ def main() -> None:
 
     assert "docs/ASSEMBLY_CONVENTIONS.md" in source
     assert "RUBP buffers must remain contiguous" in source
-    assert "solo workspace must end at scratch" in source
+    assert "solo workspace must fit inside the RUBP buffers" in source
+    assert "eight hand masks exceed solo workspace" in source
 
     previous_jsr = None
     for line_number, line in enumerate(source.splitlines(), start=1):
