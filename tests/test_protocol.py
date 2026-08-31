@@ -327,7 +327,7 @@ def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     budget = (ROOT / "docs/SOLO_MEMORY_BUDGET.md").read_text()
     assert "Proceed with one PRG" in budget
     assert "2,048" in budget
-    assert "4,115" in budget
+    assert "3,556" in budget
     assert "RACHEL ONLINE" in budget and "RACHEL SOLO" in budget
 
 

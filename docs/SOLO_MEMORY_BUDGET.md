@@ -18,18 +18,18 @@ The 8K expansion exposes `$1200-$3FFF`; CODE occupies `$1210-$3FFF`:
 | Item | Bytes |
 |---|---:|
 | Linker CODE capacity | 11,760 |
-| Current production CODE payload | 5,597 |
-| Current unused CODE | 6,163 |
+| Current production CODE payload | 6,156 |
+| Current unused CODE | 5,604 |
 | Required contingency | 2,048 |
 | First-playable CODE ceiling | 9,712 |
-| Available first-slice implementation allowance | 4,115 |
+| Remaining first-slice implementation allowance | 3,556 |
 
 `tests/check_memory_budget.py` reads the fresh ld65 map, emits
 `build/memory-budget.json`, and fails once production CODE crosses 9,712 bytes.
 CI retains the JSON as an artifact.
 
-The current production PRG is 5,614 bytes including its load address, BASIC
-trampoline and padding. The test-only fixture harness is 5,765 bytes; its
+The current production PRG is 6,173 bytes including its load address, BASIC
+trampoline and padding. The test-only fixture harness is 6,514 bytes; its
 fixture and validation code are excluded from production.
 
 ## Resident ownership and lifetime
@@ -72,6 +72,12 @@ The deterministic opponent iterates indexed legal actions and chooses the first
 play action, otherwise draw. Ace suit selection counts the remaining hand by
 suit. It does not implement its own legality rules.
 
+The first rules-core checkpoint now implements `GET_ACTION_COUNT` and
+`GET_ACTION_AT` directly over hand masks. Portable action order is canonical by
+card identity, including Ace nomination expansion and multi-card stacks, so it
+does not depend on a host language's array order. Forced draws, draw/skip
+counter rules and nominated-suit legality share the same enumerator.
+
 ## Planned first-slice code budget
 
 | Component | Ceiling |
@@ -87,6 +93,11 @@ suit. It does not implement its own legality rules.
 That plan finishes at 9,607 CODE bytes, leaving 2,153 bytes. Each stage is
 measured from the linker map rather than trusted from this estimate.
 
+The indexed-action checkpoint consumed 559 of the 1,600-byte legality/action
+ceiling. Its executable catalogue tests are intentionally exhaustive rather
+than timing representative; the playable UI will cache a count and request
+only the selected indexed action.
+
 ## Executable fixture evidence
 
 `tests/fixtures/kernel-state-v1.hex` is the canonical RKSI fixture from
@@ -95,9 +106,9 @@ fields and checks the compact fixture binding. `make solo-kernel-spike` builds a
 test-only PRG whose 6502 loader copies exactly 80 bytes into the real overlay
 and validates key fields.
 
-Emu198x executed that PRG with 8K expansion and read `$A5` from exported result
-byte `$23CC`, proving the loader and overlay execute rather than merely
-assemble. `make solo-kernel-e2e` parses the current linker label dynamically,
+Emu198x executed that PRG with 8K expansion and read `$A5` from the exported
+result byte, proving the loader, overlay and indexed catalogue execute rather
+than merely assemble. `make solo-kernel-e2e` parses the current linker label dynamically,
 runs the harness and checks the byte, so later code movement cannot stale the
 test address.
 

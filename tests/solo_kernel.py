@@ -25,6 +25,9 @@ def main() -> None:
     assert "solo_scratch       = rx_buffer+16" in source
     assert "cpx #SOLO_WS_SIZE" in source
     assert "solo_fixture_validate:" in source
+    assert "solo_get_action_count:" in source
+    assert "solo_get_action_at:" in source
+    assert "solo_card_is_legal:" in source
     assert '.assert solo_workspace_fixture_end-solo_workspace_fixture = SOLO_WS_SIZE' in source
     assert re.search(r"\.byte \$cc,\$09\s+; two packed 6-bit ordinals", source)
     print("Compact two-player fixture and 80+16-byte overlay are consistent")
