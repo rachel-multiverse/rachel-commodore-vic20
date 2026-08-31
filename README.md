@@ -116,7 +116,9 @@ UART can receive continuous frames reliably.
 
 No physical unit has been through `docs/HARDWARE_TESTING.md` yet, so this is a
 specification to check a candidate against rather than a tested endorsement.
-Two requirements do most of the work:
+The wiring is the easy half — an ordinary C64 user-port serial modem is already
+wired correctly for a VIC-20, for the reasons below. The firmware is what
+usually needs changing.
 
 **Stock Espressif ESP-AT firmware.** This client drives the ESP's own AT
 command set directly — `AT+CIPSTART`, `AT+CIPSEND`, `+IPD`. Most Commodore
@@ -126,19 +128,27 @@ host:port` and knows nothing about `AT+CIPSTART`. Such a board is electrically
 fine and functionally wrong until its ESP8266/ESP32 is reflashed with
 Espressif's AT build.
 
-**A VIC-20 pinout, not a C64 one.** On the VIC-20 the user port carries VIA #1,
-so pin M is CB2 and pin B is CB1. The C64's identical-looking connector puts
-different signals in those positions. A board sold as a "C64 user port WiFi
-modem" is therefore not automatically correct here — confirm which pins it
-actually drives before connecting it.
+**A board that only needs the lettered pins.** These are the same on both
+machines, in the same positions: TX on M, RX on C, grounds on A and N, +5V on
+pin 2. The signals behind them come from different chips — CB2 and CB1 from the
+VIC-20's VIA, PA2 and /FLAG2 from the C64's CIA — but that is inside the
+computer and nothing an external board can see. A plain three-wire user-port
+serial modem built for the C64 is wired correctly for a VIC-20.
+
+Where the two ports genuinely diverge is the numbered row. VIC-20 pins 4-8 are
+JOY0, JOY1, JOY2, light pen and cassette switch, where the C64 puts CIA counter
+and serial lines (CNT1, SP1, CNT2, SP2, /PC2). A board reaching for those — some
+fast-serial and storage designs do — is C64-only, and on a VIC-20 would be
+driving the joystick and cassette lines. A WiFi modem that just needs a UART has
+no reason to touch them, but it is the one thing worth confirming.
 
 [Sven Petersen's C64-WiFi-Modem-User-Port](https://github.com/svenpetersen1965/C64-WiFi-Modem-User-Port)
-is the reference design this driver's pin mapping targets, and it provides the
-5V/3.3V level shifting the user port requires. Its own documentation describes
-it as a C64 device and points at the 1200baud firmware, so both checks above
-apply to it. Other user-port boards list VIC-20 support — StrikeLink and the
-Turbo56K modem among them — but each carries its own firmware, so hold them to
-the same two questions.
+is the reference design this driver's pin mapping targets. It supplies the
+5V/3.3V level shifting the user port requires and uses the lettered pins, so
+the wiring carries over. Its documentation points at the 1200baud firmware, so
+it is the firmware question above that needs answering, not the wiring. Other
+user-port boards list VIC-20 support — StrikeLink and the Turbo56K modem among
+them — but each carries its own firmware, so ask them the same thing.
 
 Do not connect a bare 3.3V ESP module directly to 5V logic or power. Confirm
 regulation, level translation, connector orientation and common ground before
