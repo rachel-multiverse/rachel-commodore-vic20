@@ -190,6 +190,17 @@ def test_player_feedback_and_terminal_result_are_wired() -> None:
     assert "process_player_won:" in protocol
 
 
+def test_video_capture_workflow_is_reproducible() -> None:
+    capture = (ROOT / "tests/capture_video.py").read_text()
+    makefile = (ROOT / "Makefile").read_text()
+    assert "capture-video: e2e-prg" in makefile
+    assert '"--random-seed", str(SEED)' in capture
+    assert '"save_screenshot"' in capture
+    assert '"libx264"' in capture
+    assert '"+faststart"' in capture
+    assert '"Game finished" not in server_text' in capture
+
+
 def test_rubp_v2_crc_is_generated_and_required() -> None:
     protocol = (ROOT / "src/rubp.asm").read_text()
     network = (ROOT / "src/net/wifi.asm").read_text()
@@ -227,6 +238,7 @@ if __name__ == "__main__":
     test_recovery_and_action_metadata_are_wired()
     test_card_suits_use_the_wire_format_high_bits()
     test_player_feedback_and_terminal_result_are_wired()
+    test_video_capture_workflow_is_reproducible()
     test_rubp_v2_crc_is_generated_and_required()
     test_canonical_fixture_when_supplied_by_ci()
     print("VIC-20 RUBP/PRG conformance checks passed")

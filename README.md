@@ -96,6 +96,13 @@ Go server checkout is used by default; override it with `RACHEL_SERVER_DIR`.
 Logs and the final screenshot are retained under `build/e2e-output/`. The test
 requires the server to finish and rejects any run containing a client error.
 
+For a reproducible presentation recording of the same authentic emulator run,
+install `ffmpeg` and run `make capture-video` with `EMU198X_DIR` set. This saves
+sampled emulator frames, logs, the replayable session, a poster image and an
+H.264 MP4 under `build/video-capture/`. The default is a roughly 47-second,
+4x nearest-neighbour recording; `RACHEL_CAPTURE_EVERY`, `RACHEL_CAPTURE_FPS`
+and `RACHEL_CAPTURE_SCALE` can tune its pacing and output size.
+
 The checksum lets the VIC-20 safely retain the server's authoritative state hash
 and include it with play, draw and recovery requests. The server can therefore
 reject actions based on stale state instead of relying on syntax alone.

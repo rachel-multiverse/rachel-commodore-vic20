@@ -15,7 +15,7 @@ E2E_OBJECT = $(BUILD_DIR)/main-e2e.o
 # VIC-20 with 8KB expansion config
 CONFIG = vic20-8k.cfg
 
-.PHONY: all test e2e-prg e2e-full-game clean
+.PHONY: all test e2e-prg e2e-full-game capture-video clean
 
 all: $(BUILD_DIR) $(TARGET)
 	@echo "Built: $(TARGET)"
@@ -37,6 +37,9 @@ e2e-prg: $(BUILD_DIR) $(E2E_TARGET)
 
 e2e-full-game: e2e-prg
 	python3 tests/full_game_e2e.py
+
+capture-video: e2e-prg
+	python3 tests/capture_video.py
 
 $(E2E_OBJECT): $(SRC_DIR)/main.asm $(SRC_DIR)/*.asm $(SRC_DIR)/net/*.asm
 	$(CA65) -t vic20 -D E2E_AUTOPLAY=1 -o $@ $(SRC_DIR)/main.asm
