@@ -117,6 +117,8 @@ def test_screen_clear_terminates_and_text_uses_screen_codes() -> None:
     assert "and #$1f" in source
     assert "sta COLOR_BASE,y" in source
     assert "sta COLOR_BASE+$100,y" in source
+    assert "display_clear_row:" in source
+    assert "cpy #SCREEN_WIDTH" in source[source.index("display_clear_row:"):source.index("display_title:")]
     calculate = source[source.index("; Calculate screen address"):source.index("; Add X offset")]
     assert "asl" not in calculate
     assert "PA7 as output" not in source
@@ -200,6 +202,9 @@ def test_public_table_represents_all_eight_players() -> None:
     counts = protocol[protocol.index("pgs_counts:"):protocol.index("pgs_turn:")]
     assert "cmp player_count" in counts
     assert "sta player_count" in counts
+    render = game[game.index("render_game:"):game.index("turn_msg:")]
+    assert "jsr display_clear\n" not in render
+    assert "jsr display_clear_row" in render
 
 
 def test_player_feedback_and_terminal_result_are_wired() -> None:
@@ -209,16 +214,51 @@ def test_player_feedback_and_terminal_result_are_wired() -> None:
 
     for message in (
         "WAITING FOR GAME", "SELECT A CARD FIRST", "MOVE REJECTED-RETRY",
-        "YOU WIN!", "PLAYER ", " WINS!", "PRESS KEY TO FINISH",
+        "YOU LOSE!", "YOU FINISH: ", "P", " HOLDS THE CARDS",
+        "PRESS KEY TO FINISH",
     ):
         assert f'.byte "{message}' in main
-    assert '.byte "LR MOVE SP SELECT"' in game
+    assert '.byte "LR MOVE SP/FIRE SEL"' in game
     assert '.byte "UP/DN SUIT:"' in game
     assert '.byte " RET PLAY"' in game
+    assert '.byte "YOU\'RE OUT - WATCHING"' in game
     assert "jsr render_help\n        jsr render_hand" in main
     # GAME_STATE contains terminal winner/turn data even if PLAYER_WON is late.
     assert "lda rx_buffer+PAYLOAD_START+16\n        sta winner_index" in protocol
+    assert "local_finish_position" in protocol
+    assert "player_out_flag" in protocol
     assert "process_player_won:" in protocol
+
+
+def test_native_sound_and_joystick_feedback_are_non_blocking() -> None:
+    main = (ROOT / "src/main.asm").read_text()
+    sound = (ROOT / "src/sound.asm").read_text()
+    input_source = (ROOT / "src/input.asm").read_text()
+    assert "jsr sound_update\n        jsr net_recv" in main
+    assert "sound_ticks:" in sound
+    assert "sound_update:" in sound
+    assert "sound_delay:" not in sound
+    assert "get_joystick_input:" in input_source
+    assert "and #$7f\n        sta VIA2_DDRB" in input_source
+    assert "sta VIA2_DDRB\n        plp" in input_source
+    assert "joystick_previous" in input_source
+    assert "lda #KEY_RETURN" in input_source
+    assert "lda #'D'" in input_source
+
+
+def test_private_room_and_connection_retry_are_wired() -> None:
+    main = (ROOT / "src/main.asm").read_text()
+    connect = (ROOT / "src/connect.asm").read_text()
+    protocol = (ROOT / "src/rubp.asm").read_text()
+    assert "input_room_code:" in connect
+    assert 'ROOM CODE (OPTIONAL)' in connect
+    assert "cpx #8" in connect
+    assert "sta tx_buffer+PAYLOAD_START+28,x" in protocol
+    assert "cmp #MSG_ERROR\n        beq wfw_error" in main
+    assert "wfw_error:\n        sec\n        rts" in main
+    assert "R RETRY E EDIT Q QUIT" in main
+    assert "jmp connect_retry" in main
+    assert "jmp connect_details" in main
 
 
 def test_video_capture_workflow_is_reproducible() -> None:
@@ -230,6 +270,23 @@ def test_video_capture_workflow_is_reproducible() -> None:
     assert '"libx264"' in capture
     assert '"+faststart"' in capture
     assert '"Game finished" not in server_text' in capture
+    full_game = (ROOT / "tests/full_game_e2e.py").read_text()
+    makefile = (ROOT / "Makefile").read_text()
+    assert "e2e-eight-player: e2e-prg" in makefile
+    assert 'RACHEL_E2E_AI_PLAYERS=7' in makefile
+    assert 'RACHEL_E2E_MIN_PLAYERS", "2"' in full_game
+
+
+def test_release_bundle_and_physical_checklist_exist() -> None:
+    makefile = (ROOT / "Makefile").read_text()
+    packager = (ROOT / "scripts/package_release.py").read_text()
+    checklist = (ROOT / "docs/HARDWARE_TESTING.md").read_text()
+    assert "release: test" in makefile
+    assert '"rachel-vic20.prg"' in packager
+    assert "sha256(archive.read_bytes())" in packager
+    assert "PAL VIC-20" in checklist
+    assert "NTSC serial operation is" in checklist
+    assert "eight-player match" in checklist
 
 
 def test_rubp_v2_crc_is_generated_and_required() -> None:
@@ -271,7 +328,10 @@ if __name__ == "__main__":
     test_petscii_cards_use_raw_codes_and_colour()
     test_public_table_represents_all_eight_players()
     test_player_feedback_and_terminal_result_are_wired()
+    test_native_sound_and_joystick_feedback_are_non_blocking()
+    test_private_room_and_connection_retry_are_wired()
     test_video_capture_workflow_is_reproducible()
+    test_release_bundle_and_physical_checklist_exist()
     test_rubp_v2_crc_is_generated_and_required()
     test_canonical_fixture_when_supplied_by_ci()
     print("VIC-20 RUBP/PRG conformance checks passed")

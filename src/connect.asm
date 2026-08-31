@@ -34,6 +34,55 @@ ip_buffer:
         .res 21, 0
 
 ; -----------------------------------------------------------------------------
+; Input an optional private-room code (up to eight ASCII characters).
+; -----------------------------------------------------------------------------
+input_room_code:
+        jsr display_clear
+        lda #<room_prompt
+        sta ZP_PTR1
+        lda #>room_prompt
+        sta ZP_PTR1+1
+        lda #2
+        jsr print_centered
+        lda #0
+        sta ZP_CURSOR_X
+        lda #4
+        sta ZP_CURSOR_Y
+        ldx #0
+irc_loop:
+        jsr wait_key
+        cmp #KEY_RETURN
+        beq irc_done
+        cmp #KEY_DELETE
+        beq irc_delete
+        cpx #8
+        bcs irc_loop
+        sta room_code,x
+        inx
+        jsr print_char
+        jmp irc_loop
+irc_delete:
+        cpx #0
+        beq irc_loop
+        dex
+        lda #0
+        sta room_code,x
+        dec ZP_CURSOR_X
+        lda #' '
+        jsr print_char
+        dec ZP_CURSOR_X
+        jmp irc_loop
+irc_done:
+        lda #0
+        sta room_code,x
+        rts
+
+room_prompt:
+        .byte "ROOM CODE (OPTIONAL)", 0
+room_code:
+        .res 9, 0
+
+; -----------------------------------------------------------------------------
 ; Connect to server
 ; Returns: C=0 success, C=1 failure
 ; -----------------------------------------------------------------------------

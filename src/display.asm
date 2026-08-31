@@ -54,6 +54,31 @@ dc_color_loop:
         rts
 
 ; -----------------------------------------------------------------------------
+; Clear one character row and reset its colours without touching the rest of
+; the display. Input: A = row (0-22). Clobbers A, X, Y and ZP_PTR2/ZP_PTR3.
+; -----------------------------------------------------------------------------
+display_clear_row:
+        tax
+        lda screen_lo,x
+        sta ZP_PTR2
+        lda screen_hi,x
+        sta ZP_PTR2+1
+        lda color_lo,x
+        sta ZP_PTR3
+        lda color_hi,x
+        sta ZP_PTR3+1
+        ldy #0
+dcr_loop:
+        lda #' '
+        sta (ZP_PTR2),y
+        lda #COLOR_WHITE
+        sta (ZP_PTR3),y
+        iny
+        cpy #SCREEN_WIDTH
+        bne dcr_loop
+        rts
+
+; -----------------------------------------------------------------------------
 ; Display title screen
 ; -----------------------------------------------------------------------------
 display_title:

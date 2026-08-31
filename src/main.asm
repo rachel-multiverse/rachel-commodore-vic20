@@ -27,6 +27,7 @@ basic_end:
 
         jsr display_init
         jsr input_init
+        jsr sound_init
         jsr net_init
         jsr rubp_init
         jsr display_title
@@ -39,9 +40,12 @@ basic_end:
         ; Wait for keypress
         jsr wait_key
 
-        ; Get server address
+connect_details:
+        ; Get server address and optional private-room code.
         jsr input_ip_address
+        jsr input_room_code
 
+connect_retry:
         ; Connect to server
         jsr do_connect
         bcc conn_ok
@@ -53,12 +57,17 @@ conn_ok:
 
         ; Complete the handshake before waiting for the private initial deal.
         jsr wait_for_welcome
+        bcc welcome_ok
+        jsr net_close
+        jmp conn_failed
+welcome_ok:
 
         ; Wait for game to start
         jsr wait_for_game
 
         ; Main game loop
 main_loop:
+        jsr sound_update
         jsr net_recv
         bcs ml_no_msg
 
@@ -107,6 +116,7 @@ ml_check_turn:
 ml_check_error:
         cmp #MSG_ERROR
         bne ml_check_end
+        jsr sound_error
         jsr render_rejected
         jsr send_sync_request
         jmp main_loop
@@ -156,21 +166,25 @@ ml_not_quit:
         jmp main_loop
 
 ml_left:
+        jsr sound_move
         jsr cursor_left
         jsr render_hand
         jmp main_loop
 
 ml_right:
+        jsr sound_move
         jsr cursor_right
         jsr render_hand
         jmp main_loop
 
 ml_select:
+        jsr sound_select
         jsr toggle_select
         jsr render_hand
         jmp main_loop
 
 ml_suit_next:
+        jsr sound_move
         lda chosen_suit
         clc
         adc #1
@@ -181,6 +195,7 @@ ml_suit_next:
         jmp main_loop
 
 ml_suit_prev:
+        jsr sound_move
         lda chosen_suit
         sec
         sbc #1
@@ -204,12 +219,14 @@ ml_no_nomination:
         lda #$FF
 ml_send_play:
         pha
+        jsr sound_action
         jsr render_play_sent
         pla
         jsr send_play_cards
         jmp main_loop
 
 ml_draw:
+        jsr sound_action
         jsr render_draw_sent
         jsr send_draw
         jmp main_loop
@@ -222,46 +239,77 @@ conn_failed:
         sta ZP_PTR1+1
         lda #5
         jsr print_centered
+        lda #<msg_retry
+        sta ZP_PTR1
+        lda #>msg_retry
+        sta ZP_PTR1+1
+        lda #8
+        jsr print_centered
         jsr wait_key
+        cmp #'R'
+        beq cf_retry
+        cmp #'r'
+        beq cf_retry
+        cmp #'E'
+        beq cf_edit
+        cmp #'e'
+        beq cf_edit
         jmp quit_game
+cf_retry:
+        jmp connect_retry
+cf_edit:
+        jmp connect_details
 
 game_over:
+        jsr sound_finish
         jsr display_clear
-        lda #7
-        sta ZP_CURSOR_X
-        lda #7
-        sta ZP_CURSOR_Y
         lda winner_index
         cmp my_index
-        bne go_other_won
-        lda #<msg_you_win
+        bne go_finished
+        lda #<msg_you_lose
         sta ZP_PTR1
-        lda #>msg_you_win
-        bne go_print_result
-go_other_won:
+        lda #>msg_you_lose
+        sta ZP_PTR1+1
+        lda #6
+        jsr print_centered
+        jmp go_loser
+go_finished:
         lda #4
         sta ZP_CURSOR_X
+        lda #6
+        sta ZP_CURSOR_Y
+        lda #<msg_you_finish
+        sta ZP_PTR1
+        lda #>msg_you_finish
+        sta ZP_PTR1+1
+        jsr print_string
+        lda local_finish_position
+        clc
+        adc #'0'
+        jsr print_char
+go_loser:
+        lda #2
+        sta ZP_CURSOR_X
+        lda #9
+        sta ZP_CURSOR_Y
         lda #<msg_player
         sta ZP_PTR1
         lda #>msg_player
-go_print_result:
         sta ZP_PTR1+1
         jsr print_string
         lda winner_index
-        cmp my_index
-        beq go_turns
         clc
         adc #'1'
         jsr print_char
-        lda #<msg_wins
+        lda #<msg_holds_cards
         sta ZP_PTR1
-        lda #>msg_wins
+        lda #>msg_holds_cards
         sta ZP_PTR1+1
         jsr print_string
 go_turns:
         lda #6
         sta ZP_CURSOR_X
-        lda #10
+        lda #12
         sta ZP_CURSOR_Y
         lda #<msg_turns
         sta ZP_PTR1
@@ -272,7 +320,7 @@ go_turns:
         jsr print_hex
         lda #1
         sta ZP_CURSOR_X
-        lda #14
+        lda #16
         sta ZP_CURSOR_Y
         lda #<msg_press_key
         sta ZP_PTR1
@@ -327,11 +375,20 @@ wfw_loop:
         ; header state to recover if the one-shot WELCOME frame was lost while
         ; the modem transitioned out of CIPSEND mode.
         cmp #MSG_PLAYER_LIST
-        bne wfw_loop
+        beq wfw_player_list
+        cmp #MSG_ERROR
+        beq wfw_error
+        jmp wfw_loop
+wfw_player_list:
         jsr process_player_list_welcome
+        clc
         rts
 wfw_welcome:
         jsr process_welcome
+        clc
+        rts
+wfw_error:
+        sec
         rts
 .endproc
 
@@ -452,12 +509,16 @@ msg_players:
         .byte "PLAYERS: ", 0
 msg_conn_fail:
         .byte "CONNECTION FAILED", 0
-msg_you_win:
-        .byte "YOU WIN!", 0
+msg_retry:
+        .byte "R RETRY E EDIT Q QUIT", 0
+msg_you_lose:
+        .byte "YOU LOSE!", 0
+msg_you_finish:
+        .byte "YOU FINISH: ", 0
 msg_player:
-        .byte "PLAYER ", 0
-msg_wins:
-        .byte " WINS!", 0
+        .byte "P", 0
+msg_holds_cards:
+        .byte " HOLDS THE CARDS", 0
 msg_turns:
         .byte "TURNS: ", 0
 msg_press_key:
@@ -480,6 +541,7 @@ wait_game_hi:
 ; -----------------------------------------------------------------------------
 .include "display.asm"
 .include "input.asm"
+.include "sound.asm"
 .include "net/wifi.asm"
 .include "rubp.asm"
 .include "game.asm"

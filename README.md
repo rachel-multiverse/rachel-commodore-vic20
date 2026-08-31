@@ -5,7 +5,7 @@ A VIC-20 client for the Rachel card game, written in 6502 assembly.
 ## Requirements
 
 - **Hardware**: VIC-20 with 8KB+ memory expansion
-- **Video standard**: PAL (the current 9600-baud loop is cycle-tuned for PAL)
+- **Video standard**: PAL for network play (the software UART is cycle-tuned)
 - **Networking**: ESP8266/ESP32 WiFi modem connected to user port
 - **Assembler**: cc65 toolchain (ca65, ld65)
 
@@ -18,6 +18,10 @@ make test
 ```
 
 This produces `build/rachel.prg`.
+
+`make release` creates a distributable ZIP and SHA-256 checksum under
+`build/release/`, containing the production PRG, instructions and physical
+hardware test checklist.
 
 ## Running
 
@@ -59,6 +63,15 @@ documented VIC-20 edge adapter. The driver waits for the ESP-AT `CIPSEND`
 prompt before transmitting and strips `+IPD`/status text by
 synchronising received data on the RUBP `RACH` magic.
 
+Do not connect a bare 3.3V ESP module directly to 5V logic or power. Use the
+documented modem/edge-adapter combination or suitable regulation and level
+translation. See `docs/HARDWARE_TESTING.md` before trying physical hardware.
+
+PAL is the supported physical network target. The display/game code is not
+region-specific, but the bit-banged serial timings have not been calibrated on
+an NTSC unit; NTSC network play is therefore experimental rather than a release
+claim.
+
 ## Platform ID
 
 VIC-20 = `0x000C` (12)
@@ -95,6 +108,8 @@ set `EMU198X_DIR` to its checkout, and run `make e2e-full-game`. The adjacent
 Go server checkout is used by default; override it with `RACHEL_SERVER_DIR`.
 Logs and the final screenshot are retained under `build/e2e-output/`. The test
 requires the server to finish and rejects any run containing a client error.
+`make e2e-eight-player` runs the same production path with seven AI opponents
+and retains its independent evidence under `build/e2e-output-8/`.
 
 For a reproducible presentation recording of the same authentic emulator run,
 install `ffmpeg` and run `make capture-video` with `EMU198X_DIR` set. This saves
@@ -115,6 +130,11 @@ The VIC-20's 22×23 character display is used as:
 - Lines 8-11: Public card counts for all eight seats
 - Lines 14-16: Turn state and controls
 - Lines 18-22: Player's hand
+
+Keyboard and joystick are both supported. Left/right moves through the hand;
+Space or Fire selects a card; up/down chooses the Ace suit. Fire+up plays the
+selection and Fire+down draws. Short, non-blocking VIC sound cues acknowledge
+movement, selection, actions, errors and the final result.
 
 ## Files
 

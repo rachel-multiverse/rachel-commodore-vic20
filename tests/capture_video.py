@@ -78,7 +78,7 @@ def make_session(frames: Path) -> tuple[list[dict[str, object]], int]:
     ])
     for _ in range(VIDEO_FPS):
         index = screenshot(steps, frames, index)
-    steps.append({"action": "type_string", "text": "127.0.0.1\n", "hold_frames": 2,
+    steps.append({"action": "type_string", "text": "127.0.0.1\n\n", "hold_frames": 2,
                   "settle_frames": 20})
     remaining = GAME_FRAMES
     while remaining:
@@ -119,7 +119,7 @@ def main() -> None:
     command = ["go", "run", ".", "serve", "--addr", "127.0.0.1:6502",
                "--min-players", "2", "--ai-players", "1", "--auto-start", "1ms",
                "--ai-delay", "0", "--random-seed", str(SEED),
-               "--vic20-write-interval", "70ms"]
+               "--vic20-write-interval", "100ms"]
     with server_log_path.open("w+") as server_log:
         server = subprocess.Popen(command, cwd=SERVER, stdout=server_log,
                                   stderr=subprocess.STDOUT, text=True,

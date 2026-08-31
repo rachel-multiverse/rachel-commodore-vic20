@@ -15,8 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SERVER = Path(os.environ.get("RACHEL_SERVER_DIR", ROOT.parent / "rachel-server"))
 EMU = Path(os.environ.get("EMU198X_DIR", ""))
 EMU_BIN = EMU / "target/release/emu198x-commodore-vic-20"
-OUTPUT = ROOT / "build/e2e-output"
+OUTPUT = ROOT / "build" / os.environ.get("RACHEL_E2E_OUTPUT", "e2e-output")
 SEED = int(os.environ.get("RACHEL_E2E_SEED", "2"))
+MIN_PLAYERS = int(os.environ.get("RACHEL_E2E_MIN_PLAYERS", "2"))
+AI_PLAYERS = int(os.environ.get("RACHEL_E2E_AI_PLAYERS", "1"))
+GAME_FRAMES = int(os.environ.get("RACHEL_E2E_GAME_FRAMES", "30000"))
 
 
 def require_environment() -> None:
@@ -65,15 +68,16 @@ def main() -> None:
     session_path.write_text(json.dumps([
         {"action": "run_frames", "frames": 220},
         {"action": "press_key", "key": "Space", "hold_frames": 3},
-        {"action": "type_string", "text": "127.0.0.1\n", "hold_frames": 2,
+        {"action": "type_string", "text": "127.0.0.1\n\n", "hold_frames": 2,
          "settle_frames": 20},
-        {"action": "run_frames", "frames": 30000},
+        {"action": "run_frames", "frames": GAME_FRAMES},
     ], indent=2) + "\n")
 
     command = ["go", "run", ".", "serve", "--addr", "127.0.0.1:6502",
-               "--min-players", "2", "--ai-players", "1", "--auto-start", "1ms",
+               "--min-players", str(MIN_PLAYERS), "--ai-players", str(AI_PLAYERS),
+               "--auto-start", "1ms",
                "--ai-delay", "0", "--random-seed", str(SEED),
-               "--vic20-write-interval", "70ms"]
+               "--vic20-write-interval", "100ms"]
     with server_log_path.open("w+") as server_log:
         server = subprocess.Popen(command, cwd=SERVER, stdout=server_log,
                                   stderr=subprocess.STDOUT, text=True,

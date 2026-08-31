@@ -1,7 +1,7 @@
 [
   {"action":"run_frames","frames":220},
   {"action":"press_key","key":"Space","hold_frames":3},
-  {"action":"type_string","text":"127.0.0.1\n","hold_frames":2,"settle_frames":20},
+  {"action":"type_string","text":"127.0.0.1\n\n","hold_frames":2,"settle_frames":20},
   {"action":"run_frames","frames":5000},
   {"action":"press_key","key":"D","hold_frames":12},
   {"action":"run_frames","frames":2000},

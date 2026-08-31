@@ -172,6 +172,15 @@ sh_name_done:
         lda #RACHEL_SPEC_VER
         sta tx_buffer+PAYLOAD_START+19
 
+        ; Optional private-room code, eight bytes and null-padded.
+        ldx #0
+sh_room:
+        lda room_code,x
+        sta tx_buffer+PAYLOAD_START+28,x
+        inx
+        cpx #8
+        bne sh_room
+
         ; Advertise the existing SYNC_REQUEST acknowledgement extension.
         lda #CAP_SYNC_ACK
         sta tx_buffer+PAYLOAD_START+36
@@ -462,6 +471,44 @@ pgs_turn:
         inx
         cpx #4
         bne pgs_turn
+
+        lda rx_buffer+PAYLOAD_START+33
+        sta player_out_mask
+        ldx my_index
+        lda player_bit_masks,x
+        and player_out_mask
+        beq pgs_still_playing
+        lda #1
+        bne pgs_store_out
+pgs_still_playing:
+        lda #0
+pgs_store_out:
+        sta player_out_flag
+
+        lda #$ff
+        sta local_finish_position
+        ldx #0
+pgs_finish:
+        lda rx_buffer+PAYLOAD_START+34,x
+        sta finish_order,x
+        cmp my_index
+        bne pgs_next_finish
+        txa
+        clc
+        adc #1
+        sta local_finish_position
+pgs_next_finish:
+        inx
+        cpx #8
+        bne pgs_finish
+        lda game_over_flag
+        beq pgs_finish_done
+        lda winner_index
+        cmp my_index
+        bne pgs_finish_done
+        lda player_count
+        sta local_finish_position
+pgs_finish_done:
         lda rx_buffer+PAYLOAD_START+23
         and #1
         sta state_hash_present
@@ -641,6 +688,10 @@ deck_count:         .byte 0
 my_index:           .byte 0
 player_count:       .byte 0
 player_counts:      .res 8, 0
+player_out_mask:    .byte 0
+player_out_flag:    .byte 0
+finish_order:       .res 8, $ff
+local_finish_position: .byte $ff
 my_hand:            .res 32, 0
 turn_number:        .res 4, 0
 state_hash:         .res 8, 0
@@ -648,6 +699,8 @@ state_hash_present: .byte 0
 server_sync_ack:     .byte 0
 game_over_flag:     .byte 0
 winner_index:        .byte $ff
+player_bit_masks:
+        .byte $01, $02, $04, $08, $10, $20, $40, $80
 crc_hi:             .byte 0
 crc_lo:             .byte 0
 crc_msb:            .byte 0

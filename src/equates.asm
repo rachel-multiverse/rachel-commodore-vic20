@@ -32,6 +32,10 @@ VIC_RASTER      = $9004         ; Raster line
 VIC_COLADDR     = $9005         ; Color/char memory location
 VIC_AUX         = $900E         ; Auxiliary color
 VIC_BKGND       = $900F         ; Background/border color
+VIC_TONE1       = $900A
+VIC_TONE2       = $900B
+VIC_TONE3       = $900C
+VIC_NOISE       = $900D
 
 ; Screen memory (with 8KB+ expansion)
 SCREEN_BASE     = $1000         ; Screen RAM
@@ -61,6 +65,8 @@ VIA1_ACR        = $911B         ; Auxiliary control
 VIA1_PCR        = $911C         ; Peripheral control
 VIA1_IFR        = $911D         ; Interrupt flag
 VIA1_IER        = $911E         ; Interrupt enable
+VIA2_PORTB      = $9120         ; Keyboard columns + joystick right on PB7
+VIA2_DDRB       = $9122
 
 ; KERNAL routines
 CHROUT          = $FFD2         ; Output character
@@ -78,6 +84,7 @@ KEY_RETURN      = 13
 KEY_SPACE       = 32
 KEY_ESC         = 3             ; RUN/STOP (Ctrl-C)
 KEY_DELETE      = 20
+JIFFY_LOW       = $A2           ; KERNAL software clock, advanced by IRQ
 
 ; -----------------------------------------------------------------------------
 ; RUBP Protocol Constants

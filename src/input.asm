@@ -6,6 +6,8 @@
 ; Initialize input
 ; -----------------------------------------------------------------------------
 input_init:
+        lda #0
+        sta joystick_previous
         rts
 
 ; -----------------------------------------------------------------------------
@@ -24,6 +26,117 @@ wk_loop:
 ; -----------------------------------------------------------------------------
 get_input:
         jsr GETIN
+        bne gi_done
+        jsr get_joystick_input
+gi_done:
+        rts
+
+; Convert newly pressed joystick controls into the existing keyboard actions.
+; Left/right move, up/down choose a suit, fire selects, fire+up plays and
+; fire+down draws. Right shares VIA2 PB7 with keyboard scanning, so its DDR bit
+; is made input only for the atomic sample and then restored.
+get_joystick_input:
+        php
+        sei
+        lda VIA1_PORTA
+        sta ZP_TEMP1
+        lda VIA2_DDRB
+        pha
+        and #$7f
+        sta VIA2_DDRB
+        lda VIA2_PORTB
+        sta ZP_TEMP2
+        pla
+        sta VIA2_DDRB
+        plp
+
+        lda #0
+        sta ZP_TEMP3
+        lda ZP_TEMP1
+        and #$04
+        bne gj_no_up
+        lda ZP_TEMP3
+        ora #$01
+        sta ZP_TEMP3
+gj_no_up:
+        lda ZP_TEMP1
+        and #$08
+        bne gj_no_down
+        lda ZP_TEMP3
+        ora #$02
+        sta ZP_TEMP3
+gj_no_down:
+        lda ZP_TEMP1
+        and #$10
+        bne gj_no_left
+        lda ZP_TEMP3
+        ora #$04
+        sta ZP_TEMP3
+gj_no_left:
+        lda ZP_TEMP2
+        and #$80
+        bne gj_no_right
+        lda ZP_TEMP3
+        ora #$08
+        sta ZP_TEMP3
+gj_no_right:
+        lda ZP_TEMP1
+        and #$20
+        bne gj_edges
+        lda ZP_TEMP3
+        ora #$10
+        sta ZP_TEMP3
+
+gj_edges:
+        lda joystick_previous
+        eor #$ff
+        and ZP_TEMP3
+        sta ZP_TEMP4
+        lda ZP_TEMP3
+        sta joystick_previous
+        lda ZP_TEMP4
+        and #$10
+        beq gj_directions
+        lda ZP_TEMP3
+        and #$01
+        bne gj_play
+        lda ZP_TEMP3
+        and #$02
+        bne gj_draw
+        lda #KEY_SPACE
+        rts
+gj_play:
+        lda #KEY_RETURN
+        rts
+gj_draw:
+        lda #'D'
+        rts
+gj_directions:
+        lda ZP_TEMP4
+        and #$04
+        bne gj_left
+        lda ZP_TEMP4
+        and #$08
+        bne gj_right
+        lda ZP_TEMP4
+        and #$01
+        bne gj_up
+        lda ZP_TEMP4
+        and #$02
+        bne gj_down
+        lda #0
+        rts
+gj_left:
+        lda #KEY_LEFT
+        rts
+gj_right:
+        lda #KEY_RIGHT
+        rts
+gj_up:
+        lda #KEY_UP
+        rts
+gj_down:
+        lda #KEY_DOWN
         rts
 
 ; -----------------------------------------------------------------------------
@@ -121,3 +234,5 @@ hand_count:
         .byte 0
 selected_cards:
         .res 32, 0
+joystick_previous:
+        .byte 0

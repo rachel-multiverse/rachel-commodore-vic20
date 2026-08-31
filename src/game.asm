@@ -7,7 +7,10 @@
 ; Render entire game state
 ; -----------------------------------------------------------------------------
 render_game:
-        jsr display_clear
+        ; Normal state updates are incremental. Clearing the complete 506-cell
+        ; screen made the VIC visibly flash and exposed half-rendered frames.
+        lda #12
+        jsr display_clear_row
 
         ; Show current turn at top
         lda #7
@@ -134,6 +137,22 @@ player_table_y:
         .byte 9, 9, 9, 10, 10, 10, 11, 11
 
 render_help:
+        lda #14
+        jsr display_clear_row
+        lda #15
+        jsr display_clear_row
+        lda #16
+        jsr display_clear_row
+        lda player_out_flag
+        beq rh_active
+        lda #<watching_msg
+        sta ZP_PTR1
+        lda #>watching_msg
+        sta ZP_PTR1+1
+        lda #14
+        jsr print_centered
+        rts
+rh_active:
         lda current_turn
         cmp my_index
         bne rh_waiting
@@ -177,8 +196,10 @@ your_turn_msg:
         .byte "YOUR TURN - D DRAWS", 0
 wait_turn_msg:
         .byte "WAITING FOR TURN", 0
+watching_msg:
+        .byte "YOU'RE OUT - WATCHING", 0
 controls_msg:
-        .byte "LR MOVE SP SELECT", 0
+        .byte "LR MOVE SP/FIRE SEL", 0
 suit_help_msg:
         .byte "UP/DN SUIT:", 0
 play_help_msg:
@@ -189,6 +210,8 @@ play_help_msg:
 ; Shows cards at bottom of screen
 ; -----------------------------------------------------------------------------
 render_hand:
+        lda #20
+        jsr display_clear_row
         ; Position at row 18
         lda #0
         sta ZP_CURSOR_X
