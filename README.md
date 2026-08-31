@@ -99,7 +99,7 @@ requires the server to finish and rejects any run containing a client error.
 For a reproducible presentation recording of the same authentic emulator run,
 install `ffmpeg` and run `make capture-video` with `EMU198X_DIR` set. This saves
 sampled emulator frames, logs, the replayable session, a poster image and an
-H.264 MP4 under `build/video-capture/`. The default is a roughly 47-second,
+H.264 MP4 under `build/video-capture/`. The default is a roughly 44-second,
 4x nearest-neighbour recording; `RACHEL_CAPTURE_EVERY`, `RACHEL_CAPTURE_FPS`
 and `RACHEL_CAPTURE_SCALE` can tune its pacing and output size.
 
@@ -111,7 +111,9 @@ reject actions based on stale state instead of relying on syntax alone.
 
 The VIC-20's 22×23 character display is used as:
 - Line 0: Turn indicator
-- Lines 3-5: Discard pile / game info
+- Lines 2-7: PETSCII discard card
+- Lines 8-11: Public card counts for all eight seats
+- Lines 14-16: Turn state and controls
 - Lines 18-22: Player's hand
 
 ## Files

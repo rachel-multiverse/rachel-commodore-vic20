@@ -439,6 +439,14 @@ process_game_state:
 pgs_counts:
         lda rx_buffer+PAYLOAD_START+7,x
         sta player_counts,x
+        beq pgs_next_count
+        txa
+        clc
+        adc #1
+        cmp player_count
+        bcc pgs_next_count
+        sta player_count
+pgs_next_count:
         inx
         cpx #8
         bne pgs_counts

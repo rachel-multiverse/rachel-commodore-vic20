@@ -36,7 +36,8 @@ render_game:
         lda discard_top
         jsr render_discard_card
 
-        ; Show player hand
+        ; Show the whole public table, then this player's controls and hand.
+        jsr render_player_table
         jsr render_help
         jsr render_hand
 
@@ -46,6 +47,91 @@ turn_msg:
         .byte "TURN: P", 0
 discard_msg:
         .byte "DISCARD", 0
+
+; -----------------------------------------------------------------------------
+; Render all public hand counts in three compact rows (up to eight seats).
+; Current player is yellow, this client is green, finished players are purple.
+; -----------------------------------------------------------------------------
+render_player_table:
+        lda #<cards_left_msg
+        sta ZP_PTR1
+        lda #>cards_left_msg
+        sta ZP_PTR1+1
+        lda #8
+        jsr print_centered
+        ldx #0
+rpt_loop:
+        cpx player_count
+        bcs rpt_done
+        cpx #8
+        bcs rpt_done
+        lda player_table_x,x
+        sta ZP_CURSOR_X
+        lda player_table_y,x
+        sta ZP_CURSOR_Y
+
+        lda #COLOR_WHITE
+        cpx my_index
+        bne rpt_not_me
+        lda #COLOR_GREEN
+rpt_not_me:
+        cpx current_turn
+        bne rpt_not_turn
+        lda #COLOR_YELLOW
+rpt_not_turn:
+        ldy player_counts,x
+        bne rpt_have_color
+        lda #COLOR_PURPLE
+rpt_have_color:
+        sta ZP_TEMP3
+
+        lda #'P'
+        jsr print_table_char
+        txa
+        clc
+        adc #'1'
+        jsr print_table_char
+        lda #':'
+        jsr print_table_char
+
+        lda player_counts,x
+        ldy #0
+rpt_tens:
+        cmp #10
+        bcc rpt_digits
+        sec
+        sbc #10
+        iny
+        bne rpt_tens
+rpt_digits:
+        sta ZP_TEMP4
+        tya
+        clc
+        adc #'0'
+        jsr print_table_char
+        lda ZP_TEMP4
+        clc
+        adc #'0'
+        jsr print_table_char
+        inx
+        bne rpt_loop
+rpt_done:
+        rts
+
+print_table_char:
+        pha
+        lda ZP_TEMP3
+        jsr set_cursor_color
+        pla
+        jsr print_char
+        rts
+
+cards_left_msg:
+        .byte "CARDS LEFT", 0
+player_table_x:
+        .byte 0, 7, 14, 0, 7, 14, 0, 7
+player_table_y:
+        .byte 9, 9, 9, 10, 10, 10, 11, 11
 
 render_help:
         lda current_turn

@@ -17,9 +17,9 @@ EMU = Path(os.environ.get("EMU198X_DIR", ""))
 EMU_BIN = EMU / "target/release/emu198x-commodore-vic-20"
 OUTPUT = Path(os.environ.get("RACHEL_CAPTURE_DIR", ROOT / "build/video-capture"))
 SEED = int(os.environ.get("RACHEL_E2E_SEED", "2"))
-CAPTURE_EVERY = int(os.environ.get("RACHEL_CAPTURE_EVERY", "50"))
+CAPTURE_EVERY = int(os.environ.get("RACHEL_CAPTURE_EVERY", "100"))
 GAME_FRAMES = int(os.environ.get("RACHEL_CAPTURE_GAME_FRAMES", "30000"))
-VIDEO_FPS = int(os.environ.get("RACHEL_CAPTURE_FPS", "15"))
+VIDEO_FPS = int(os.environ.get("RACHEL_CAPTURE_FPS", "8"))
 SCALE = int(os.environ.get("RACHEL_CAPTURE_SCALE", "4"))
 
 

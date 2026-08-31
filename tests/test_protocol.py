@@ -186,6 +186,22 @@ def test_petscii_cards_use_raw_codes_and_colour() -> None:
         assert glyph in game
 
 
+def test_public_table_represents_all_eight_players() -> None:
+    game = (ROOT / "src/game.asm").read_text()
+    protocol = (ROOT / "src/rubp.asm").read_text()
+    assert "render_player_table:" in game
+    assert "cpx #8" in game[game.index("render_player_table:"):game.index("render_help:")]
+    assert '.byte "CARDS LEFT"' in game
+    assert ".byte 0, 7, 14, 0, 7, 14, 0, 7" in game
+    assert ".byte 9, 9, 9, 10, 10, 10, 11, 11" in game
+    for colour in ("COLOR_GREEN", "COLOR_YELLOW", "COLOR_PURPLE"):
+        assert colour in game[game.index("render_player_table:"):game.index("render_help:")]
+    # A GAME_STATE can recover the occupied-seat count if a lobby list was lost.
+    counts = protocol[protocol.index("pgs_counts:"):protocol.index("pgs_turn:")]
+    assert "cmp player_count" in counts
+    assert "sta player_count" in counts
+
+
 def test_player_feedback_and_terminal_result_are_wired() -> None:
     main = (ROOT / "src/main.asm").read_text()
     game = (ROOT / "src/game.asm").read_text()
@@ -253,6 +269,7 @@ if __name__ == "__main__":
     test_recovery_and_action_metadata_are_wired()
     test_card_suits_use_the_wire_format_high_bits()
     test_petscii_cards_use_raw_codes_and_colour()
+    test_public_table_represents_all_eight_players()
     test_player_feedback_and_terminal_result_are_wired()
     test_video_capture_workflow_is_reproducible()
     test_rubp_v2_crc_is_generated_and_required()
