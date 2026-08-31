@@ -46,6 +46,11 @@ SOLO_INFO_BYTES    = 19
 .assert solo_scratch >= rx_buffer+64, error, "solo scratch must clear the RUBP buffers"
 .assert SW_HAND_MASKS+SOLO_MAX_PLAYERS*SOLO_SEAT_BYTES <= SOLO_WS_SIZE, error, "eight hand masks exceed solo workspace"
 
+; GET_INFO-compatible compact-port descriptor at ZP_PTR1. Fixture build only:
+; see the note in api.asm. The descriptor is a conformance artifact for other
+; ports to compare against, and nothing on the VIC-20 can call it.
+.ifdef SOLO_KERNEL_TEST
+
 ; GET_INFO-compatible compact-port descriptor at ZP_PTR1. It uses the shared
 ; RHKI envelope but advertises only what this allocation-free compact port
 ; actually exposes: deterministic indexed actions, opaque workspace and no
@@ -73,3 +78,5 @@ solo_info_data:
         .word 0                  ; no binary apply-summary buffer
         .byte 53                 ; count + maximum hand
         .word $000d              ; order, opaque workspace, no allocation
+
+.endif

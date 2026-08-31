@@ -120,14 +120,30 @@ welcome_ok:
 
         ; Main game loop
 game_started:
+        ; The lobby's "WAITING FOR GAME" sits on rows render_game never
+        ; repaints, because normal updates are deliberately incremental, so it
+        ; would stay across the discard card all game. Clear just those rows:
+        ; a full display_clear is over a thousand cell writes, and the software
+        ; UART only receives while the main loop is polling it.
+        ldx #3
+gs_clear:
+        txa
+        pha
+        jsr display_clear_row
+        pla
+        tax
+        inx
+        cpx #8
+        bcc gs_clear
 main_loop:
         jsr sound_update
         jsr net_recv
-        bcs ml_no_msg
-
+        bcs ml_no_msg_far
         jsr rubp_validate
-        bcs ml_no_msg
-
+        bcc ml_have_msg
+ml_no_msg_far:
+        jmp ml_no_msg           ; the dispatch below is past branch range
+ml_have_msg:
         lda rx_buffer+HDR_TYPE
         cmp #MSG_GAME_STATE
         bne ml_check_drawn
@@ -152,7 +168,29 @@ ml_check_sync:
         jsr render_hand
         lda server_sync_ack
         beq ml_sync_no_ack
+        ; Acknowledge only a snapshot we actually hold. HAND_SYNC carries the
+        ; same state hash as the GAME_STATE before it, so acking on HAND_SYNC
+        ; alone certifies that a frame arrived, not that the public view we are
+        ; about to act on did. A discarded GAME_STATE would otherwise be
+        ; acknowledged as received and answered with TURN_START, leaving
+        ; discard_top a turn behind. Pull the pair again instead.
+        lda game_state_seen
+        beq ml_sync_stale
+        lda #0
+        sta game_state_seen
         jsr send_sync_ack
+        jmp ml_input
+ml_sync_stale:
+.ifdef E2E_AUTOPLAY
+        ; Test builds count how often the client was about to certify a
+        ; snapshot it never received. Every one of these was previously an
+        ; unearned acknowledgement.
+        inc stale_acks_avoided
+        bne ml_sync_counted
+        dec stale_acks_avoided
+ml_sync_counted:
+.endif
+        jsr send_sync_request
 ml_sync_no_ack:
         jmp ml_input
 

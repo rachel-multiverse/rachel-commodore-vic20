@@ -35,6 +35,15 @@ checklist in `HARDWARE_TESTING.md` is completed on a real unit.
 - The release ZIP contains the PRG, controls, status and hardware checklist and
   has a SHA-256 sidecar.
 
+The serial link discards a large share of inbound frames as a matter of course:
+instrumenting the reject path counted 37 to 74 CRC failures during games that
+completed cleanly. `net_recv` resynchronises on the full `RACH` magic before a
+buffer ever reaches `rubp_validate`, so these are corrupted frames rather than
+modem chatter. The protocol absorbs it by design, and that is the condition the
+client is expected to work in — but the figure is an emulator measurement, and
+what a real VIC-20 and a real modem do is one of the things
+`HARDWARE_TESTING.md` should establish.
+
 ROM licensing prevents the emulator run itself from executing on the hosted
 runner, so CI assembles its executable fixture while the ROM-backed run remains
 a reproducible local release check (`make solo-kernel-e2e`).
@@ -42,15 +51,19 @@ a reproducible local release check (`make solo-kernel-e2e`).
 ## Persistence decision
 
 The rules core already provides deterministic 125-byte `RKS2` save/load with a
-checksum, structural validation and byte-identical round-trip tests. The release
-candidate does **not** expose disk save/resume in its UI.
+checksum, structural validation and byte-identical round-trip tests. Those
+routines, the `GET_INFO` descriptor and the action-count entry point are
+compiled into the fixture build only: nothing on a VIC-20 can reach them, so
+the production PRG does not carry them.
+
+The release candidate does **not** expose disk save/resume in its UI.
 
 Doing so safely requires choosing and testing a real storage path (datasette,
 1541-compatible disk, SD2IEC/Ultimate device, or an online-hosted save). KERNAL
 I/O also temporarily owns memory and interrupts that the screen and software
-UART depend upon. With only 15 bytes remaining before the conservative
-feature ceiling, an untestable storage implementation would spend contingency
-and create a misleading compatibility claim. The stable RKS2 format means this
+UART depend upon. With 286 bytes remaining before the conservative
+feature ceiling, an untestable storage implementation would still spend most of
+the headroom and create a misleading compatibility claim. The stable RKS2 format means this
 can be added later without changing saved game semantics.
 
 ## Remaining release blockers
@@ -64,8 +77,8 @@ Everything else is release polish rather than a known gameplay blocker.
 
 ## Corrections carried by this candidate
 
-Three defects found while implementing issue #10, listed because two of them
-had been shipping and neither was visible to the source-level checks:
+Four defects found while implementing issue #10, listed because three of them
+had been shipping and none was visible to the source-level checks:
 
 - `solo_deck_pop` shifted one byte past the 39-byte packed deck, which is
   `SW_DISCARD_COUNT`. Every draw zeroed the discard count, so the pile could
@@ -76,3 +89,14 @@ had been shipping and neither was visible to the source-level checks:
   passed five cards the selected card scrolled off the row entirely.
 - Solo play seeded every game, and every replay, with the fixture's constant
   42, so the deal never varied.
+- The client acknowledged state snapshots it had never received. `HAND_SYNC`
+  carries the same state hash as the `GAME_STATE` ahead of it, and the
+  acknowledgement was sent on `HAND_SYNC` using that hash, so a discarded
+  `GAME_STATE` was still certified as held. The server then released
+  `TURN_START` against a view a turn old, leaving `discard_top` stale — it has
+  no other source. Measured at seven to nine unearned acknowledgements per
+  ten-play game before the fix (issue #14).
+- The lobby's "WAITING FOR GAME" was never cleared when a game started. Normal
+  updates are deliberately incremental, so nothing repaints those rows and the
+  text sat across the discard card for the whole online game. Only ever visible
+  in a screenshot of a live game, which is how it was found.

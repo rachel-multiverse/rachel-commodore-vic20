@@ -17,6 +17,14 @@ sait_bad:
         sec
         rts
 
+; The rest of this module is the published kernel API, which nothing on the
+; VIC-20 itself calls: there is no external caller for a descriptor or a save
+; image on this machine, and the front end drives solo_apply_action directly.
+; It is compiled into the fixture build, which exercises all of it, and left
+; out of the production PRG, which has 15 bytes of headroom and no way to reach
+; it. Moving the feature into the UI later is a matter of moving this .ifdef.
+.ifdef SOLO_KERNEL_TEST
+
 ; Return A = number of legal actions. The catalogue order is the portable ABI
 ; order: rank, suit bitmask, nomination; DRAW follows every play. No action
 ; table is allocated.
@@ -170,6 +178,8 @@ sls_copy:
 sls_bad:
         sec
         rts
+
+.endif
 
 ; Input A = zero-based action index. C=0 and the solo_action_* fields describe
 ; the action; C=1 means out of range. Enumeration uses only four bytes of state.

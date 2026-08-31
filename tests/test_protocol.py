@@ -337,6 +337,28 @@ def test_release_bundle_and_physical_checklist_exist() -> None:
     assert "does **not** expose disk save/resume" in release_status
 
 
+def test_sync_ack_certifies_only_state_the_client_holds() -> None:
+    main = (ROOT / "src/main.asm").read_text()
+    protocol = (ROOT / "src/rubp.asm").read_text()
+    # HAND_SYNC carries the same state hash as the GAME_STATE ahead of it, so
+    # acknowledging on HAND_SYNC alone certifies that a frame arrived rather
+    # than that the public view did. On a link that discards frames routinely
+    # that let the server release TURN_START against a stale discard_top.
+    sync = main[main.index("ml_check_sync:"):main.index("ml_check_turn:")]
+    assert "lda game_state_seen" in sync
+    assert "jsr send_sync_ack" in sync
+    assert "jsr send_sync_request" in sync      # recover instead of certifying
+    # The flag is set where the authoritative view is actually parsed, and
+    # nowhere else, or it goes back to attesting to a frame.
+    state = protocol[protocol.index("process_game_state:"):protocol.index("process_card_drawn:")]
+    assert "sta game_state_seen" in state
+    assert protocol.count("sta game_state_seen") == 1
+    # discard_top is the field that goes stale: GAME_STATE is its only source.
+    assert protocol.count("sta discard_top") == 1
+    turn = protocol[protocol.index("process_turn_start:"):protocol.index("pts_done:")]
+    assert "discard_top" not in turn
+
+
 def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     makefile = (ROOT / "Makefile").read_text()
     main = (ROOT / "src/main.asm").read_text()
@@ -359,7 +381,9 @@ def test_solo_kernel_spike_is_single_prg_budgeted() -> None:
     budget = (ROOT / "docs/SOLO_MEMORY_BUDGET.md").read_text()
     assert "Proceed with one PRG" in budget
     assert "2,048" in budget
-    assert "15" in budget
+    # Match the table row, not a bare number: "15" also occurs inside
+    # "125-byte", so the loose form passed for the wrong reason.
+    assert "| Remaining first-slice implementation allowance | 286 |" in budget
     assert "RACHEL ONLINE" in budget and "RACHEL SOLO" in budget
 
 
@@ -569,6 +593,7 @@ if __name__ == "__main__":
     test_active_game_reconnect_reclaims_and_resynchronizes()
     test_video_capture_workflow_is_reproducible()
     test_release_bundle_and_physical_checklist_exist()
+    test_sync_ack_certifies_only_state_the_client_holds()
     test_solo_kernel_spike_is_single_prg_budgeted()
     test_rubp_v2_crc_is_generated_and_required()
     test_canonical_fixture_when_supplied_by_ci()

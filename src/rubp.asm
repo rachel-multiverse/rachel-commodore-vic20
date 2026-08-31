@@ -470,6 +470,15 @@ rubp_validate:
         rts
 
 rv_fail:
+.ifdef E2E_AUTOPLAY
+        ; Test builds only: count discarded frames so a failing end-to-end run
+        ; can say whether the link dropped one, rather than leaving it to
+        ; inference. Production carries neither the counter nor this increment.
+        inc rejected_frames
+        bne rv_fail_counted
+        dec rejected_frames             ; hold at 255 rather than wrap
+rv_fail_counted:
+.endif
         sec
         rts
 
@@ -564,6 +573,9 @@ pgs_next_finish:
         lda player_count
         sta local_finish_position
 pgs_finish_done:
+        ; This snapshot is now the client's view, so it may be acknowledged.
+        lda #1
+        sta game_state_seen
         lda rx_buffer+PAYLOAD_START+23
         and #1
         sta state_hash_present
@@ -732,6 +744,9 @@ game_id_hi:     .byte 0
 reconnect_token: .res 8, 0
 nominated_suit: .byte $FF
 chosen_suit:     .byte 0
+.ifdef E2E_AUTOPLAY
+rejected_frames: .byte 0
+.endif
 
 ; Game state
 current_turn:       .byte 0
@@ -752,6 +767,10 @@ my_hand:            .res 52, 0
 turn_number:        .res 4, 0
 state_hash:         .res 8, 0
 state_hash_present: .byte 0
+game_state_seen:    .byte 0
+.ifdef E2E_AUTOPLAY
+stale_acks_avoided: .byte 0
+.endif
 server_sync_ack:     .byte 0
 game_over_flag:     .byte 0
 winner_index:        .byte $ff
