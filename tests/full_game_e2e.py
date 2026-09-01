@@ -175,7 +175,7 @@ def main() -> None:
                 proxy.start()
             result = subprocess.run([
                 str(EMU_BIN), "--headless", "--region", REGION,
-                "--ram-expansion-kb", "11",
+                "--ram-expansion", "8k",
                 "--prg", str(sys_prg), "--prg-sys", "--esp-at-tcp",
                 "--script", str(session_path), "--screenshot", str(screenshot_path),
             ], cwd=EMU, text=True, capture_output=True, timeout=360)
