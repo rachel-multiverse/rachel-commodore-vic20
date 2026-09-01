@@ -37,9 +37,9 @@ def main() -> None:
             raise SystemExit(f"{name} missing from label file")
         addresses[name] = int(match.group(1), 16)
     address = addresses["solo_fixture_result"]
-    # Direct-SYS the machine-code portion. The runtime's ordinary $1201 PRG
-    # inference currently forces an 8K *total* setting, which is too small for
-    # the test-only image even when 11K was explicitly requested.
+    # Direct-SYS the machine-code portion, entering at a fixed address rather
+    # than through BASIC's RUN, so the frame budget below measures the kernel
+    # and not the editor.
     linked = (ROOT / "build/rachel-solo-kernel-spike.prg").read_bytes()
     sys_prg = ROOT / "build/rachel-solo-kernel-spike-sys.prg"
     sys_prg.write_bytes(bytes((0x10, 0x12)) + linked[17:])
@@ -57,9 +57,7 @@ def main() -> None:
         ),
     ], indent=2) + "\n")
     result = subprocess.run([
-        # Emu198x expresses high expansion in addition to the VIC's 3K low
-        # block: 11 therefore means 3K low + the required 8K at $2000.
-        str(BIN), "--headless", "--ram-expansion-kb", "11",
+        str(BIN), "--headless", "--ram-expansion", "8k",
         "--prg", str(sys_prg), "--prg-sys",
         "--script", str(session),
     ], cwd=EMU, check=True, text=True, capture_output=True)

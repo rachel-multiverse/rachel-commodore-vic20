@@ -130,7 +130,7 @@ def main() -> None:
         try:
             wait_for_server(server)
             result = subprocess.run([
-                str(EMU_BIN), "--headless", "--ram-expansion-kb", "11",
+                str(EMU_BIN), "--headless", "--ram-expansion", "8k",
                 "--prg", str(sys_prg), "--prg-sys", "--esp-at-tcp",
                 "--script", str(session_path),
             ], cwd=EMU, text=True, capture_output=True, timeout=300)
